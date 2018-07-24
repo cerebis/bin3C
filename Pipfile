@@ -1,0 +1,27 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[dev-packages]
+
+[packages]
+biopython = "*"
+python-louvain = "*"
+matplotlib = "*"
+networkx = "*"
+numba = "*"
+numpy = "<1.15.0"
+pandas = "*"
+pysam = "*"
+scipy = "*"
+seaborn = "*"
+sparse = "*"
+tqdm = "*"
+typing = "*"
+uuid = "*"
+pyyaml = "*"
+pip = "*"
+
+[requires]
+python_version = "2.7"
