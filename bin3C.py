@@ -1,7 +1,8 @@
 from mzd.cluster import *
 from mzd.contact_map import *
-from mzd.io_utils import load_object, save_object
 from mzd.exceptions import ApplicationException
+from mzd.io_utils import load_object, save_object
+from mzd.utils import *
 import logging
 import sys
 
@@ -57,6 +58,8 @@ if __name__ == '__main__':
     cmd_cluster.add_argument('-s', '--seed', default=None, help='Random seed')
     cmd_cluster.add_argument('--no-report', default=False, action='store_true',
                              help='Do not generate a cluster report')
+    cmd_cluster.add_argument('--no-spades', default=False, action='store_true',
+                             help='Assembly was not done using SPAdes')
     cmd_cluster.add_argument('--no-plot', default=False, action='store_true',
                              help='Do not generate a clustered heatmap')
     cmd_cluster.add_argument('--no-fasta', default=False, action='store_true',
@@ -153,7 +156,7 @@ if __name__ == '__main__':
             # cluster the entire map
             clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR)
             # generate report per cluster
-            cluster_report(cm, clustering, is_spades=True)
+            cluster_report(cm, clustering, is_spades=not args.no_spades)
             # write MCL clustering file
             write_mcl(cm, os.path.join(args.OUTDIR, 'clustering.mcl'), clustering)
             # serialize full clustering object

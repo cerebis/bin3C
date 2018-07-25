@@ -3,16 +3,13 @@ matplotlib.use('Agg')
 
 from mzd import io_utils, sparse_utils
 from mzd.seq_utils import *
-from mzd.utils import *
 from collections import OrderedDict, namedtuple
-from functools import partial
 from numba import jit, int64, float64, void
 import Bio.SeqIO as SeqIO
 import logging
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
-import os
 import pysam
 import seaborn
 import scipy.sparse as sp
