@@ -106,7 +106,8 @@ Assuming your read-set is in separate Forward/Reverse form, you could create the
 We have been using recent versions of BWA MEM, which have the option `-5` (such as v0.7.15-r1142-dirty). Assuming your Hi-C reads are interleaved, with BWA MEM we recommend users ignore mate-pairing steps (`-SP`) and importantly require 5-prime alignments are primary (`-5`).
 
 ```bash
-bwa mem -5SP contigs.fasta.gz hic_paired.fastq.gz | samtools view -bS - > hic2ctg_unsorted.bam
+bwa mem -5SP contigs.fasta.gz hic_paired.fastq.gz | \
+    samtools view -bS - > hic2ctg_unsorted.bam
 ```
 
 **3. Sort the resulting "Hi-C to contigs" BAM file in name order**
@@ -120,7 +121,9 @@ samtools sort -o hic2ctg.bam -n hic2ctg_unsorted.bam
 Steps **2** and **3** can be combined with some pipes on a single line, where we can also filter out alignments which will not contribute to the map and save processing time downstream: secondary, supplementary and unmapped. Depending on your environment, you may wish to add concurrency with BWA (`-t`) and Samtools commands (`-@`).
 
 ```bash
-bwa mem -5SP contigs.fasta.gz hic_paired.fastq.gz | samtools view -F 0x904 -bS - | samtools sort -o hic2ctg.bam -
+bwa mem -5SP contigs.fasta.gz hic_paired.fastq.gz | \
+    samtools view -F 0x904 -bS - | \
+    samtools sort -o hic2ctg.bam -
 ```
 
 ### bin3C analysis
@@ -143,7 +146,7 @@ While running, the user will be presented with progress information.
 
 All files from this stage will be stored in the output directory, including a detailed log. In particular, the compressed contact map is named: `contact_map.p.gz`.
 
-##### Output directory contents after stage 1.
+#### Output directory contents after stage 1.
 
 |#| Filename         | Description                      |
 |-|------------------|----------------------------------|
@@ -162,7 +165,7 @@ Using defaults aside from verbose output, and electing to store the results from
 python2 ./bin3C cluster -v bin3c_out/contact_map.p.gz bin3c_out
 ```
 
-##### Output directory contents after stage 2
+#### Output directory contents after stage 2
 
 Assuming the same directory was used in both stages, all analysis files will be located together.
 
@@ -179,12 +182,12 @@ Assuming the same directory was used in both stages, all analysis files will be 
 | 9| fasta              | Per-cluster multi-fasta sequences                 |
 |10| infomap.log        | Infomap runtime log                               |
 
-### Inspecting results
+## Inspecting results
 
-##### Fasta for each genome bin 
+#### Fasta for each genome bin 
 After stage 2 has been successfully completed, binned assembly contigs can be found in the `fasta/` subdirectory. We suggest analysing these with CheckM, BUSCO for inferring completeness and contamination. GTDBtk can be used for a more thorough taxonomic analysis.
 
-##### Clustering result
+#### Clustering result
 The most portable format of the clustering result is `clustering.mcl` which follows the format established by MCL (surprisingly). In this format, each line pertains to a cluster (counting from 1), while the contents of a line is a space-separated list of member sequences.
 
 Therefore a file with the contents:
@@ -201,7 +204,7 @@ There are 3 clusters, with memberships as follows:
 - Cluster2: seq3
 - Cluster3: seq2
 
-##### Qualitative inspection of result
+#### Qualitative inspection of result
 
 Users are recommended to inspect the heatmap, to qualitatively appraise the result (see below), where heatmap pixel intensity is the logarithm of the Hi-C interaction strength. The heatmap is downsampled to a maximum dimension 4000x4000 due to the need to create a density matrix representation. Using a higher resolution is possible if memory is available.
 
