@@ -512,9 +512,18 @@ def write_mcl(contact_map, fname, clustering):
     """
     with open(fname, 'w') as outh:
         seq_info = contact_map.seq_info
+        # track those sequences that were rejected during filtering
+        lost = np.ones(contact_map.total_seq, dtype=np.bool)
         cl_soln = {}
         for k, v in clustering.iteritems():
+            # sequence wasn't lost to filtering
+            lost[v['seq_ids']] = False
             cl_soln[k] = [seq_info[ix].name for ix in np.sort(v['seq_ids'])]
+
+        # create singleton clusters for all the lost sequences.
+        # if these are left out, scoring measures aren't happy
+        for n, ix in enumerate(np.argwhere(lost), len(cl_soln)):
+            cl_soln[n] = [seq_info[ix[0]].name]
 
         clid_ascending = sorted(cl_soln.keys())
         for k in clid_ascending:
