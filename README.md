@@ -74,7 +74,7 @@ pipenv --python 2.7
 pipenv install
 ```
 
-To invoke bin3C using the Pipenv environment, things are slightly different. First, we launch a shell which will be preconfigured by Pipenv, then we can confidentally invoke bin3C directly.
+To invoke bin3C using the Pipenv environment, things are slightly different. First, we launch a shell which will be preconfigured by Pipenv, then we can confidently invoke bin3C directly.
 
 ```bash
 pipenv shell
@@ -93,7 +93,7 @@ pipenv run ./bin3C.py --help
 
 **1. Assemble the metagenome**
 
-We have been using MetaSPAdes (v3.11.1) in our work, but there is no reason that an alternative assembler with a low missassembly rate could be used. One minor caveat at this time however is that while producing the per-cluster report, we cheat a fraction and extract depth of coverage from the SPAdes' sequence names rather than calculate this statistic overselves. Thefore, with other assemblers this information with not be reported at the present time.
+We have been using MetaSPAdes (v3.11.1) in our work, but there is no reason that an alternative assembler with a low missassembly rate could be used. One minor caveat at this time however is that while producing the per-cluster report, we cheat a fraction and extract depth of coverage from SPAdes' sequence names rather than calculate this statistic ourselves. Therefore, with other assemblers this information with not be reported at the present time.
 
 Assuming your read-set is in separate Forward/Reverse form, you could create the assembly as so:
 
@@ -118,7 +118,7 @@ Downstream, bin3C expects read-pairs to come sequentially which requires the BAM
 samtools sort -o hic2ctg.bam -n hic2ctg_unsorted.bam
 ```
 
-Steps **2** and **3** can be combined with some pipes on a single line, where we can also filter out alignments which will not contribute to the map and save processing time downstream: secondary, supplementary and unmapped. Depending on your environment, you may wish to add concurrency with BWA (`-t`) and Samtools commands (`-@`).
+Steps **2** and **3** can be combined with some pipes on a single line, where we can also filter out alignments which will not contribute to the map and save processing time downstream. These being read-pairs where either is flagged secondary, supplementary and unmapped. Depending on your environment, you may wish to add concurrency with BWA (`-t`) and Samtools command (`-@`).
 
 ```bash
 bwa mem -5SP contigs.fasta.gz hic_paired.fastq.gz | \
@@ -129,7 +129,7 @@ bwa mem -5SP contigs.fasta.gz hic_paired.fastq.gz | \
 ### bin3C analysis
 
 We have split bin3C into two primary stages. 
-1) mkmap: create a contact map
+1) mkmap: Create a contact map
 2) cluster: Clustering the contact map (genome binning)
 
 **4. Create a contact map for analysis**
