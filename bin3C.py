@@ -6,13 +6,19 @@ from mzd.utils import *
 import logging
 import sys
 
+__version__ = '0.1'
+
 if __name__ == '__main__':
     import argparse
+
+    def mk_version():
+        return 'bin3C v{}'.format(__version__)
 
     def out_name(base, suffix):
         return '{}{}'.format(base, suffix)
 
     global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument('-V', '--version', help='Show the application version')
     global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
@@ -75,6 +81,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if args.version:
+        print mk_version()
+        sys.exit(0)
+
     try:
         make_dir(args.OUTDIR, args.clobber)
     except IOError as e:
@@ -109,6 +119,10 @@ if __name__ == '__main__':
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)
     root.addHandler(fh)
+
+    # Add some environmental details
+    logger.debug(mk_version())
+    logger.debug(sys.version.replace('\n', ' '))
 
     try:
 

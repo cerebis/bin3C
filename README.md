@@ -190,12 +190,12 @@ After stage 2 has been successfully completed, binned assembly contigs can be fo
 #### Clustering result
 The most portable format of the clustering result is `clustering.mcl` which follows the format established by MCL (surprisingly). In this format, each line pertains to a cluster (counting from 1), while the contents of a line is a space-separated list of member sequences.
 
-Therefore a file with the contents:
+E.g. For a MCL file of three lines with the following contents:
 
 ```
-seq1 seq4 seq5
-seq3
-seq2
+L1: seq1 seq4 seq5
+L2: seq2
+L3: seq2
 ```
 
 There are 3 clusters, with memberships as follows:
