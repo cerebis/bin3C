@@ -18,7 +18,7 @@ if __name__ == '__main__':
         return '{}{}'.format(base, suffix)
 
     global_parser = argparse.ArgumentParser(add_help=False)
-    global_parser.add_argument('-V', '--version', help='Show the application version')
+    global_parser.add_argument('-V', '--version', default=False, action='store_true', help='Show the application version')
     global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
