@@ -27,6 +27,7 @@ Currently bin3C has only been tested with short-read sequencing data.
 ## Runtime and setup
 - Python 2.7
 - Pip or Pipenv for dependency resolution
+    - Pipenv and Conda do not place nicely together.
 - Git if you wish to clone from our repository: https://github.com/cerebis/bin3C
 - GCC is required by some modules within the dependency hierarchy (llvmlite)
 
