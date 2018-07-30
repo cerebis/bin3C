@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from mzd.cluster import *
 from mzd.contact_map import *
 from mzd.exceptions import ApplicationException
