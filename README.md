@@ -138,10 +138,10 @@ We have split bin3C into two primary stages.
 
 The contact map is the primary data object on which the genome binning is performed. The map is derived from the assembly sequences chosen (scaffolds or contigs) and the corresponding Hi-C alignments BAM file.
 
-Assuming Pip-style invocation, a map with default parameters but verbose output would be made as follows.
+Assuming Pip-style invocation, a map for a library constructed using the MluCI restriction enzyme and verbose output could be made as follows:
 
 ```bash
-python2 ./bin3C mkmap -v contigs.fasta.gz hic2ctg.bam bin3c_out
+python2 ./bin3C mkmap -e MluCI -v contigs.fasta.gz hic2ctg.bam bin3c_out
 ```
 
 While running, the user will be presented with progress information. 
