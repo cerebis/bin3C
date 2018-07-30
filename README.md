@@ -161,10 +161,10 @@ All files from this stage will be stored in the output directory, including a de
 
 After a map has been created, the second stage of analysis is clustering the map from stage one. 
 
-Using defaults aside from verbose output, and electing to store the results from the clustering stage in the same directory as the map, clustering is performed as follows.
+Using defaults aside from verbose output, and storing the results from the clustering stage in a directory called `bin3c_clust`, the clustering is performed as follows:
 
 ```bash
-python2 ./bin3C cluster -v bin3c_out/contact_map.p.gz bin3c_out
+python2 ./bin3C cluster -v bin3c_out/contact_map.p.gz bin3c_clust
 ```
 
 #### Output directory contents after stage 2
@@ -180,9 +180,8 @@ Assuming the same directory was used in both stages, all analysis files will be 
 | 5| cluster_report.csv | A per-cluster report of various statistics        | 
 | 6| cm_graph.edges     | The graph used in clustering in edge list format  |
 | 7| cm_graph.tree      | Infomap clustering output                         |
-| 8| contact_map.p.gz   | Contact map from stage 1                          |
-| 9| fasta              | Per-cluster multi-fasta sequences                 |
-|10| infomap.log        | Infomap runtime log                               |
+| 8| fasta              | Per-cluster multi-fasta sequences                 |
+| 9| infomap.log        | Infomap runtime log                               |
 
 ## Inspecting results
 
