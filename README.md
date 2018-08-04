@@ -27,7 +27,9 @@ Currently bin3C has only been tested with short-read sequencing data.
 ## Runtime and setup
 - Python 2.7
 - Pip or Pipenv for dependency resolution
+    - Pipenv and Conda do not place nicely together.
 - Git if you wish to clone from our repository: https://github.com/cerebis/bin3C
+- GCC is required by some modules within the dependency hierarchy (llvmlite)
 
 ### Obtaining bin3C
 
@@ -136,10 +138,10 @@ We have split bin3C into two primary stages.
 
 The contact map is the primary data object on which the genome binning is performed. The map is derived from the assembly sequences chosen (scaffolds or contigs) and the corresponding Hi-C alignments BAM file.
 
-Assuming Pip-style invocation, a map with default parameters but verbose output would be made as follows.
+Assuming Pip-style invocation, a map for a library constructed using the MluCI restriction enzyme and verbose output could be made as follows:
 
 ```bash
-python2 ./bin3C mkmap -v contigs.fasta.gz hic2ctg.bam bin3c_out
+python2 ./bin3C mkmap -e MluCI -v contigs.fasta.gz hic2ctg.bam bin3c_out
 ```
 
 While running, the user will be presented with progress information. 
@@ -159,10 +161,10 @@ All files from this stage will be stored in the output directory, including a de
 
 After a map has been created, the second stage of analysis is clustering the map from stage one. 
 
-Using defaults aside from verbose output, and electing to store the results from the clustering stage in the same directory as the map, clustering is performed as follows.
+Using defaults aside from verbose output, and storing the results from the clustering stage in a directory called `bin3c_clust`, the clustering is performed as follows:
 
 ```bash
-python2 ./bin3C cluster -v bin3c_out/contact_map.p.gz bin3c_out
+python2 ./bin3C cluster -v bin3c_out/contact_map.p.gz bin3c_clust
 ```
 
 #### Output directory contents after stage 2
@@ -178,9 +180,8 @@ Assuming the same directory was used in both stages, all analysis files will be 
 | 5| cluster_report.csv | A per-cluster report of various statistics        | 
 | 6| cm_graph.edges     | The graph used in clustering in edge list format  |
 | 7| cm_graph.tree      | Infomap clustering output                         |
-| 8| contact_map.p.gz   | Contact map from stage 1                          |
-| 9| fasta              | Per-cluster multi-fasta sequences                 |
-|10| infomap.log        | Infomap runtime log                               |
+| 8| fasta              | Per-cluster multi-fasta sequences                 |
+| 9| infomap.log        | Infomap runtime log                               |
 
 ## Inspecting results
 
