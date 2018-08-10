@@ -126,7 +126,7 @@ The informap repository is a submodule of bin3C. If you've checked out the repo 
 # go into the bin3C root folde
 cd bin3C
 # just run make without arguments
-make
+make -f Makefile.infomap
 ```
 
 This will build infomap for source and replace the executable that came with bin3C.
