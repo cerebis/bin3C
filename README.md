@@ -123,6 +123,8 @@ A statically built Infomap executable has been included in the repository, but t
 The informap repository is a submodule of bin3C. If you've checked out the repo with recursion, you should already have the source code to Infomap. In that case, assuming you have `make` and `g++` installed, you can build your own executable very easily from the bin3C root folder.
 
 ```bash
+# go into the bin3C root folde
+cd bin3C
 # just run make without arguments
 make
 ```
