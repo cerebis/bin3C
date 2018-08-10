@@ -112,7 +112,7 @@ or you can invoke bin3C without going into a deeper shell as follows.
 pipenv run ./bin3C.py --help
 ```
 
-## Building Infomap
+## Optional - building Infomap
 
 ### Requirements
 - make
