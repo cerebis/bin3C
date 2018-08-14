@@ -42,7 +42,6 @@ if __name__ == '__main__':
     """
     make and save the contact map object
     """
-    cmd_mkmap.add_argument('-s', '--seed', default=None, help='Random seed')
     cmd_mkmap.add_argument('--eta', default=False, action='store_true',
                            help='Pre-count bam alignments to provide an ETA')
     cmd_mkmap.add_argument('--bin-size', type=int,
