@@ -73,8 +73,8 @@ if __name__ == '__main__':
                              help='Do not generate cluster FASTA files')
     cmd_cluster.add_argument('--only-large', default=False, action='store_true',
                              help='Only write FASTA for clusters longer than min_extent')
-    cmd_cluster.add_argument('--algo', default='infomap', choices=['infomap', 'louvain', 'mcl', 'slm', 'simap'],
-                             help='Clustering algorithm to apply [infomap]')
+    # cmd_cluster.add_argument('--algo', default='infomap', choices=['infomap', 'louvain', 'mcl', 'slm', 'simap'],
+    #                          help='Clustering algorithm to apply [infomap]')
     cmd_cluster.add_argument('--fasta', default=None,
                              help='Alternative source FASTA location from that supplied during mkmap')
     cmd_cluster.add_argument('MAP', help='Contact map')
