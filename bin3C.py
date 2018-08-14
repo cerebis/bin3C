@@ -123,6 +123,7 @@ if __name__ == '__main__':
     # Add some environmental details
     logger.debug(mk_version())
     logger.debug(sys.version.replace('\n', ' '))
+    logger.debug('Command line: {}'.format(' '.join(sys.argv)))
 
     try:
 
