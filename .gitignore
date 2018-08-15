@@ -1,3 +1,10 @@
+external/*
+!external/Infomap
+!external/infomap
+!external/mcl
+!external/simap-1.0.0.jar
+!external/ModularityOptimizer.jar
+
 # IDE
 .idea/
 
