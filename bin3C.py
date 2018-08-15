@@ -18,17 +18,32 @@ if __name__ == '__main__':
     def out_name(base, suffix):
         return '{}{}'.format(base, suffix)
 
+    def ifelse(arg, default):
+        if arg is None:
+            return default
+        else:
+            return arg
+
+    runtime_defaults = {
+        'min_reflen': 1000,
+        'min_signal': 5,
+        'max_image': 4000,
+        'min_extent': 50000,
+        'min_mapq': 60,
+        'strong': 10
+    }
+
     global_parser = argparse.ArgumentParser(add_help=False)
     global_parser.add_argument('-V', '--version', default=False, action='store_true', help='Show the application version')
     global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
-    global_parser.add_argument('--max-image', type=int, default=4000, help='Maximum image size for plots [4000]')
-    global_parser.add_argument('--min-extent', type=int, default=50000,
+    global_parser.add_argument('--max-image', type=int, help='Maximum image size for plots [4000]')
+    global_parser.add_argument('--min-extent', type=int,
                                help='Minimum cluster extent used in output [50000]')
-    global_parser.add_argument('--min-reflen', type=int, default=1000,
+    global_parser.add_argument('--min-reflen', type=int,
                                help='Minimum acceptable reference length [1000]')
-    global_parser.add_argument('--min-signal', type=int, default=5, help='Minimum acceptable signal [5]')
+    global_parser.add_argument('--min-signal', type=int, help='Minimum acceptable signal [5]')
 
     parser = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool')
     subparsers = parser.add_subparsers(title='commands', dest='command', description='Valid commands',
@@ -49,9 +64,9 @@ if __name__ == '__main__':
                            help='Size of bins for windows extent maps [disabled]')
     cmd_mkmap.add_argument('--min-insert', type=int,
                            help='Minimum pair separation [None]')
-    cmd_mkmap.add_argument('--min-mapq', type=int, default=60,
+    cmd_mkmap.add_argument('--min-mapq', type=int,
                            help='Minimum acceptable mapping quality [60]')
-    cmd_mkmap.add_argument('--strong', type=int, default=10,
+    cmd_mkmap.add_argument('--strong', type=int,
                            help='Accepted alignments must being N matches [10]')
     cmd_mkmap.add_argument('-e', '--enzyme', metavar='NEB_NAME', required=True, action='append',
                            help='Case-sensitive NEB enzyme name. Use multiple times for multiple enzymes')
@@ -134,11 +149,11 @@ if __name__ == '__main__':
                             args.enzyme,
                             args.FASTA,
                             args.min_insert,
-                            args.min_mapq,
-                            min_len=args.min_reflen,
-                            min_sig=args.min_signal,
-                            min_extent=args.min_extent,
-                            strong=args.strong,
+                            ifelse(args.min_mapq, runtime_defaults['min_mapq']),
+                            min_len=ifelse(args.min_reflen, runtime_defaults['min_reflen']),
+                            min_sig=ifelse(args.min_signal, runtime_defaults['min_signal']),
+                            min_extent=ifelse(args.min_extent, runtime_defaults['min_extent']),
+                            strong=ifelse(args.strong, runtime_defaults['strong']),
                             bin_size=args.bin_size,
                             precount=args.eta)
 
@@ -160,13 +175,17 @@ if __name__ == '__main__':
             # Load a pre-existing serialized contact map
             logger.info('Loading existing contact map from: {}'.format(args.MAP))
             cm = load_object(args.MAP)
-            cm.min_extent = args.min_extent
-            # update the mask if the user has changed the thresholds
-            if args.min_signal != cm.min_sig or args.min_reflen != cm.min_len:
+
+            cm.min_extent = ifelse(args.min_extent, runtime_defaults['min_extent'])
+
+            # update the mask if the user has specified a threshold, which might be the same as before
+            if args.min_signal is not None or args.min_reflen is not None:
                 # pedantically set these and pass to method just in-case of logic oversight
-                cm.min_len = args.min_reflen
-                cm.min_sig = args.min_signal
-                cm.set_primary_acceptance_mask(min_sig=args.min_signal, min_len=args.min_reflen, update=True)
+                min_reflen = ifelse(args.min_reflen, runtime_defaults['min_reflen'])
+                min_signal = ifelse(args.min_signal, runtime_defaults['min_signal'])
+                cm.min_len = min_reflen
+                cm.min_sig = min_signal
+                cm.set_primary_acceptance_mask(min_sig=min_signal, min_len=min_reflen, update=True)
 
             # cluster the entire map
             clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR)
