@@ -38,7 +38,7 @@ Installation of bin3C is currently only via Github. Users can either clone the r
 Clone the repo using git.
 
 ```bash
-git clone https://github.com/cerebis/bin3C
+git clone --recursive https://github.com/cerebis/bin3C
 ```
 
 Pull down the repo using curl.
@@ -54,32 +54,55 @@ bin3C has a number of Python dependencies, which can be resolved using either Pi
 
 For Pip, we suggest using a virtual environment to resolve dependencies and avoid clashes with system-wide modules or other applications setup by yourself.
 
+This is easiest to set up with the Python module `virtualenv`, which can be obtained from Pip and installed in userspace as follows:
+
+```base
+pip install --user virtualenv
+```
+
+Once virtualenv is installed, you can install bin3C in its own environment.
+
 ```bash
+# enter the bin3C folder
 cd bin3C
+# make a new ve in the bin3C folder
 virtualenv .
+# using the pip of the ve, installed requirements
 bin/pip2 install -r requirements.txt
 ```
 
 Once complete and assuming you are in the repository folder, bin3C is invoked as follows to make certain we use the local python2 we just set up.
 
 ```bash
+# run bin3C using the ve python
 bin/python2 ./bin3C.py --help
 ```
 
 #### Using Pipenv
 
-Or using Pipenv, the following will create a virtual environment and install the dependencies.
+Pipenv can be installed with Pip in userspace as follows:
 
 ```bash
+pip install --user pipenv
+```
+
+Once you have Pipenv, the following will create a virtual environment and install the dependencies.
+
+```bash
+# enter the bin3C folder
 cd bin3C
+# use pipenv to create your ve
 pipenv --python 2.7
+# now ask pipenv to resolve dependencies
 pipenv install
 ```
 
 To invoke bin3C using the Pipenv environment, things are slightly different. First, we launch a shell which will be preconfigured by Pipenv, then we can confidently invoke bin3C directly.
 
 ```bash
+# initialise the ve
 pipenv shell
+# now run bin3C directly
 ./bin3C.py --help
 ```
 
@@ -87,6 +110,34 @@ or you can invoke bin3C without going into a deeper shell as follows.
 
 ```bash
 pipenv run ./bin3C.py --help
+```
+
+## Optional - building Infomap
+
+### Requirements
+- make
+- g++
+
+A statically built Infomap executable has been included in the repository, but this can still cause issues if your runtime environment is particularly old, or you wish to run bin3C on something other than Linux. There is an alternative, which requires a few extra steps.
+
+The informap repository is a submodule of bin3C. If you've checked out the repo with recursion, you should already have the source code to Infomap. In that case, assuming you have `make` and `g++` installed, you can build your own executable very easily from the bin3C root folder.
+
+```bash
+# go into the bin3C root folde
+cd bin3C
+# build infomap for your local environment
+make -f Makefile.infomap
+```
+
+This will build infomap for source and replace the executable that came with bin3C.
+
+If you do not have the infomap source in your bin3C/external directory, you may have forgotten to clone bin3C with recursion or perhaps you downloaded a tarball. No worries, you can get the submodule without having to pull down the entire bin3C repository again.
+
+```bash
+# go into the bin3C root folder
+cd bin3C
+# get the submodules -- there's only one for now
+git submodule update --init --recursive
 ```
 
 ## Typical Workflow
@@ -211,8 +262,7 @@ Users are recommended to inspect the heatmap, to qualitatively appraise the resu
 
 When inspecting a heatmap, signal should be concentrated down the diagonal in crisp blocks of varying size. Relatively intense unattached off-diagonal blocks *might* indicate bin splitting errors. For data with good signal to noise, the overall appearance of the off-diagonal field should be dark or substantially much less intense than the diagonal. 
 
-Good clustering and signal to noise
-*(add good heatmap )*
+Good clustering and signal to noise. ![good map](https://drive.google.com/uc?id=1MZNRmU4PwTwkdI4WXU_qG9d9kIMGmoQl )
 
 Potential clustering errors and poor signal to noise.
 *( add bad heatmap )*
