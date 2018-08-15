@@ -262,7 +262,7 @@ Users are recommended to inspect the heatmap, to qualitatively appraise the resu
 
 When inspecting a heatmap, signal should be concentrated down the diagonal in crisp blocks of varying size. Relatively intense unattached off-diagonal blocks *might* indicate bin splitting errors. For data with good signal to noise, the overall appearance of the off-diagonal field should be dark or substantially much less intense than the diagonal. 
 
-Good clustering and signal to noise. ![good map](https://drive.google.com/uc?id=1PxR0nUbj89kvDzUvIWN0GA8VFR9hvuJB)
+Good clustering and signal to noise. ![good map](https://drive.google.com/uc?id=1MZNRmU4PwTwkdI4WXU_qG9d9kIMGmoQl)
 
 Potential clustering errors and poor signal to noise.
 *( add bad heatmap )*
