@@ -4,7 +4,7 @@ import logging
 import sys
 import os
 
-__version__ = '0.1'
+__version__ = '0.1.1'
 
 if __name__ == '__main__':
     import argparse
