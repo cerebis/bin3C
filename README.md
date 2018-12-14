@@ -154,6 +154,22 @@ Assuming your read-set is in separate Forward/Reverse form, you could create the
 > spades.py --meta -1 shotgun_R1.fastq.gz -2 shotgun_R2.fastq.gz -o spades_out
 ```
 
+_**Optional step. Split references into fragments**_
+
+Prior to mapping Hi-C reads to assembly contigs, the contigs can be broken into smaller pieces using the tool `split_ref.py`. 
+
+Our experiments have shown that splitting may improve both Precision and Recall (i.e. improve the reconstruction of genomes), compensating, we surmise, for assembly errors. It, however, should be noted that the evidence was not unamimiously favourable. Further, `split_ref.py` currently takes only a simplistic approach and makes no attempt to identify the points at which these suspected errors occur (or other features which contradict internal assumptions).
+
+If you choose to perform this step, we suggest a target fragment size no smaller than 5kb, with the default being 10kb. For a given target size, any sufficiently long contig will be split into smaller pieces. As majority of contigs will not evenly divide by the chosen target size, the remainder (or shortfall) is distributed across the fragments. Using this approach, fragments are uniform in size within a contig and close to the target size but between contigs can very slightly.
+
+The resulting split contigs will retain their original identifiers, but each will be appended with the coordinates of the split to retain uniqueness within the multi-fasta file.
+
+e.g. Splitting a 37kb contig `NODE_887_length_37685_cov_9.578421` with a target size of 10kb, the fragments would be as follows:
+
+  - `NODE_887_length_37685_cov_9.578421.0_9421`
+  - `NODE_887_length_37685_cov_9.578421.9421_18842`
+  - `NODE_887_length_37685_cov_9.578421.28263_37685`
+
 **2. Map the Hi-C reads to assembly contigs or scaffolds**
 
 We have been using recent versions of BWA MEM, which have the option `-5` (such as v0.7.15-r1142-dirty). Assuming your Hi-C reads are interleaved, with BWA MEM we recommend users ignore mate-pairing steps (`-SP`) and importantly require 5-prime alignments are primary (`-5`).
