@@ -158,7 +158,7 @@ def read_from_stream(stream, fmt='yaml'):
     :return: loaded object
     """
     if fmt == 'yaml':
-        return yaml.load(stream)
+        return yaml.safe_load(stream)
     elif fmt == 'json':
         return json_load_byteified(stream)
 
