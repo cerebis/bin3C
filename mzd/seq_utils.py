@@ -168,7 +168,7 @@ class SequenceAnalyzer:
 
     @staticmethod
     def read_report(file_name):
-        return yaml.load(open(file_name, 'r'))
+        return yaml.safe_load(open(file_name, 'r'))
 
     def __init__(self, seq_map, seq_report, seq_info, tip_size):
         self.seq_map = seq_map
