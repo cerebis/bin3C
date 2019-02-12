@@ -1,28 +1,26 @@
-#!/usr/bin/env python
-from mzd.cluster import *
-from mzd.contact_map import *
-from mzd.exceptions import ApplicationException
-from mzd.io_utils import load_object, save_object
-from mzd.utils import *
+from proxigenomics_toolkit.contact_map import *
+from proxigenomics_toolkit.exceptions import ApplicationException
+from proxigenomics_toolkit.io_utils import load_object, save_object
+from proxigenomics_toolkit.misc_utils import make_random_seed
 import logging
-import sys
 
-__version__ = '0.1.1'
+__version__ = '0.2a1'
 
-if __name__ == '__main__':
+
+def main():
+
     import argparse
+    import sys
 
     def mk_version():
         return 'bin3C v{}'.format(__version__)
 
-    def out_name(base, suffix):
-        return '{}{}'.format(base, suffix)
-
-    def ifelse(arg, default):
-        if arg is None:
-            return default
-        else:
-            return arg
+    def or_default(v, default):
+        if v is not None:
+            assert isinstance(v, type(default)), \
+                'supplied value [{}] is not of the correct type [{}]'.format(v, type(default))
+            return v
+        return default
 
     runtime_defaults = {
         'min_reflen': 1000,
@@ -34,7 +32,8 @@ if __name__ == '__main__':
     }
 
     global_parser = argparse.ArgumentParser(add_help=False)
-    global_parser.add_argument('-V', '--version', default=False, action='store_true', help='Show the application version')
+    global_parser.add_argument('-V', '--version', default=False, action='store_true',
+                               help='Show the application version')
     global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
@@ -149,11 +148,11 @@ if __name__ == '__main__':
                             args.enzyme,
                             args.FASTA,
                             args.min_insert,
-                            ifelse(args.min_mapq, runtime_defaults['min_mapq']),
-                            min_len=ifelse(args.min_reflen, runtime_defaults['min_reflen']),
-                            min_sig=ifelse(args.min_signal, runtime_defaults['min_signal']),
-                            min_extent=ifelse(args.min_extent, runtime_defaults['min_extent']),
-                            strong=ifelse(args.strong, runtime_defaults['strong']),
+                            or_default(args.min_mapq, runtime_defaults['min_mapq']),
+                            min_len=or_default(args.min_reflen, runtime_defaults['min_reflen']),
+                            min_sig=or_default(args.min_signal, runtime_defaults['min_signal']),
+                            min_extent=or_default(args.min_extent, runtime_defaults['min_extent']),
+                            strong=or_default(args.strong, runtime_defaults['strong']),
                             bin_size=args.bin_size,
                             precount=args.eta)
 
@@ -176,16 +175,21 @@ if __name__ == '__main__':
             logger.info('Loading existing contact map from: {}'.format(args.MAP))
             cm = load_object(args.MAP)
 
-            cm.min_extent = ifelse(args.min_extent, runtime_defaults['min_extent'])
+            if args.min_extent is not None:
+                cm.min_extent = args.min_extent
 
-            # update the mask if the user has specified a threshold, which might be the same as before
-            if args.min_signal is not None or args.min_reflen is not None:
-                # pedantically set these and pass to method just in-case of logic oversight
-                min_reflen = ifelse(args.min_reflen, runtime_defaults['min_reflen'])
-                min_signal = ifelse(args.min_signal, runtime_defaults['min_signal'])
-                cm.min_len = min_reflen
-                cm.min_sig = min_signal
-                cm.set_primary_acceptance_mask(min_sig=min_signal, min_len=min_reflen, update=True)
+            # in cases where a user supplies a value, we will need to redo the acceptance mask
+            # otherwise the mask will have been done with default values.
+            remask = False
+            if args.min_signal is not None:
+                cm.min_sig = args.min_signal
+                remask = True
+            if args.min_reflen is not None:
+                cm.min_len = args.min_reflen
+                remask = True
+
+            if remask:
+                cm.set_primary_acceptance_mask(min_sig=cm.min_reflen, min_len=cm.min_len, update=True)
 
             # cluster the entire map
             clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR)
