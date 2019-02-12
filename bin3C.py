@@ -90,7 +90,7 @@ if __name__ == '__main__':
     # cmd_cluster.add_argument('--algo', default='infomap', choices=['infomap', 'louvain', 'mcl', 'slm', 'simap'],
     #                          help='Clustering algorithm to apply [infomap]')
     cmd_cluster.add_argument('--fasta', default=None,
-                             help='Alternative source FASTA location from that supplied during mkmap')
+                             help='Alternative location of source FASTA from that supplied during mkmap')
     cmd_cluster.add_argument('MAP', help='Contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
 
