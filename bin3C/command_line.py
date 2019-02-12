@@ -212,7 +212,8 @@ def main():
             if not args.no_plot:
                 # the entire clustering
                 plot_clusters(cm, os.path.join(args.OUTDIR, 'cluster_plot.png'), clustering,
-                              max_image_size=args.max_image, ordered_only=False, simple=False, permute=True)
+                              max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
+                                                        ordered_only=False, simple=False, permute=True)
 
     except ApplicationException as ex:
         import sys
