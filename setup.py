@@ -7,7 +7,7 @@ setuptools.setup(
     name='bin3C',
     description='Extract metagenome-assembled genomes from metagenomic data using Hi-C linkage information',
     long_description=long_description,
-    version='0.2',
+    version='0.2a2',
     author='Matthew Z DeMaere',
     author_email='matt.demaere@gmail.com',
     platforms='Linux-86_x64',

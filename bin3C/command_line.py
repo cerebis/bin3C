@@ -4,7 +4,7 @@ from proxigenomics_toolkit.io_utils import load_object, save_object
 from proxigenomics_toolkit.misc_utils import make_random_seed
 import logging
 
-__version__ = '0.2a1'
+__version__ = '0.2a2'
 
 
 def main():
@@ -59,7 +59,10 @@ def main():
     cmd_mkmap.add_argument('--eta', default=False, action='store_true',
                            help='Pre-count bam alignments to provide an ETA')
     cmd_mkmap.add_argument('--bin-size', type=int,
-                           help='Size of bins for windows extent maps [disabled]')
+                           help='Size of bins for windows extent maps [None]')
+    cmd_mkmap.add_argument('--tip-size', type=int, default=None,
+                           help='The size of the region used when tracking only the ends '
+                                'of contigs (bp) [Experimental] [None]')
     cmd_mkmap.add_argument('--min-insert', type=int,
                            help='Minimum pair separation [None]')
     cmd_mkmap.add_argument('--min-mapq', type=int,
@@ -143,6 +146,15 @@ def main():
 
         if args.command == 'mkmap':
 
+            if args.tip_size is not None:
+                logger.warn('[Experimental] Specifying tip-size enables independent tracking of the ends of contigs.')
+                if args.tip_size < 5000:
+                    logger.warn('[Experimental] It is recommended to use tip sizes no smaller than 5kbp')
+                if args.tip_size > args.min_reflen:
+                    msg = 'min-reflen cannot be smaller than the tip-size'
+                    logger.error('[Experimental] {}'.format(msg))
+                    raise ApplicationException(msg)
+
             # Create a contact map for analysis
             cm = ContactMap(args.BAM,
                             args.enzyme,
@@ -154,6 +166,7 @@ def main():
                             min_extent=or_default(args.min_extent, runtime_defaults['min_extent']),
                             strong=or_default(args.strong, runtime_defaults['strong']),
                             bin_size=args.bin_size,
+                            tip_size=args.tip_size,
                             precount=args.eta)
 
             if cm.is_empty():
