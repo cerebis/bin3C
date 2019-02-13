@@ -26,120 +26,36 @@ Currently bin3C has only been tested with short-read sequencing data.
 
 ## Runtime and setup
 - Python 2.7
-- Pip or Pipenv for dependency resolution
-    - Pipenv and Conda do not place nicely together.
-- Git if you wish to clone from our repository: https://github.com/cerebis/bin3C
-- GCC is required by some modules within the dependency hierarchy (llvmlite)
+- Pip (>=v19) for installation dependency resolution
+- GCC is required by some dependencies (eg. llvmlite)
 
 ### Obtaining bin3C
 
-Installation of bin3C is currently only via Github. Users can either clone the repository with git or obtain an archive of the tarball using github URL syntax.
+The bin3C development branch can be installed easily using pip, but we strongly encourage users to make use of a virtual python environment to avoid dependency version conflicts. 
 
-Clone the repo using git.
+Detailed below are the steps involved in setting up a working application. After pip completes successfully, the bin3C executable entry-point can be found in your python environment's bin directory.
 
+***Note**: bin3C has a number of Python dependencies and a few external binary executables, these will all be resolved automatically when using pip, however NumPy and Cython must be installed first.*
+
+Eg. To install the development branch.
 ```bash
-git clone --recursive https://github.com/cerebis/bin3C
+# 1. create a virtual environment
+mkdir bin3C_env
+virtualenv -p python2.7 bin3C_env
+cd bin3C_env
+
+# 2. make sure pip is up to date
+bin/pip install -U pip
+
+# 3. install numpy and cython
+bin/pip install "numpy<1.15" cython
+
+# 4. install bin3C
+bin/pip install git+https://github.com/cerebis/bin3C@pgtk
+
+# 5. get bin3C's help
+bin/bin3C -h
 ```
-
-Pull down the repo using curl.
-
-```bash
-mkdir bin3C && curl -L https://api.github.com/repos/cerebis/bin3C/tarball/master | tar -C bin3C --strip-components 1 -xvz 
-```
-### Dependency resolution
-
-bin3C has a number of Python dependencies, which can be resolved using either Pip or Pipenv.
-
-#### Using Pip
-
-For Pip, we suggest using a virtual environment to resolve dependencies and avoid clashes with system-wide modules or other applications setup by yourself.
-
-This is easiest to set up with the Python module `virtualenv`, which can be obtained from Pip and installed in userspace as follows:
-
-```base
-pip install --user virtualenv
-```
-
-Once virtualenv is installed, you can install bin3C in its own environment.
-
-```bash
-# enter the bin3C folder
-cd bin3C
-# make a new ve in the bin3C folder
-virtualenv .
-# using the pip of the ve, installed requirements
-bin/pip2 install -r requirements.txt
-```
-
-Once complete and assuming you are in the repository folder, bin3C is invoked as follows to make certain we use the local python2 we just set up.
-
-```bash
-# run bin3C using the ve python
-bin/python2 ./bin3C.py --help
-```
-
-#### Using Pipenv
-
-Pipenv can be installed with Pip in userspace as follows:
-
-```bash
-pip install --user pipenv
-```
-
-Once you have Pipenv, the following will create a virtual environment and install the dependencies.
-
-```bash
-# enter the bin3C folder
-cd bin3C
-# use pipenv to create your ve
-pipenv --python 2.7
-# now ask pipenv to resolve dependencies
-pipenv install
-```
-
-To invoke bin3C using the Pipenv environment, things are slightly different. First, we launch a shell which will be preconfigured by Pipenv, then we can confidently invoke bin3C directly.
-
-```bash
-# initialise the ve
-pipenv shell
-# now run bin3C directly
-./bin3C.py --help
-```
-
-or you can invoke bin3C without going into a deeper shell as follows.
-
-```bash
-pipenv run ./bin3C.py --help
-```
-
-## Optional - building Infomap
-
-### Requirements
-- make
-- g++
-
-A statically built Infomap executable has been included in the repository, but this can still cause issues if your runtime environment is particularly old, or you wish to run bin3C on something other than Linux. There is an alternative, which requires a few extra steps.
-
-The informap repository is a submodule of bin3C. If you've checked out the repo with recursion, you should already have the source code to Infomap. In that case, assuming you have `make` and `g++` installed, you can build your own executable very easily from the bin3C root folder.
-
-```bash
-# go into the bin3C root folde
-cd bin3C
-# build infomap for your local environment
-make -f Makefile.infomap
-```
-
-This will build infomap for source and replace the executable that came with bin3C.
-
-If you do not have the infomap source in your bin3C/external directory, you may have forgotten to clone bin3C with recursion or perhaps you downloaded a tarball. No worries, you can get the submodule without having to pull down the entire bin3C repository again.
-
-```bash
-# go into the bin3C root folder
-cd bin3C
-# get the submodules -- there's only one for now
-git submodule update --init --recursive
-```
-
 ## Typical Workflow
 
 ### Initial data preparation
@@ -151,7 +67,7 @@ We have been using MetaSPAdes (v3.11.1) in our work, but there is no reason that
 Assuming your read-set is in separate Forward/Reverse form, you could create the assembly as so:
 
 ```bash
-> spades.py --meta -1 shotgun_R1.fastq.gz -2 shotgun_R2.fastq.gz -o spades_out
+spades.py --meta -1 shotgun_R1.fastq.gz -2 shotgun_R2.fastq.gz -o spades_out
 ```
 
 _**Optional step. Split references into fragments**_
@@ -208,7 +124,8 @@ The contact map is the primary data object on which the genome binning is perfor
 Assuming Pip-style invocation, a map for a library constructed using the MluCI restriction enzyme and verbose output could be made as follows:
 
 ```bash
-python2 ./bin3C mkmap -e MluCI -v contigs.fasta.gz hic2ctg.bam bin3c_out
+# inside bin3C's virtual env
+bin/bin3C mkmap -e MluCI -v contigs.fasta.gz hic2ctg.bam bin3c_out
 ```
 
 While running, the user will be presented with progress information. 
@@ -231,7 +148,8 @@ After a map has been created, the second stage of analysis is clustering the map
 Using defaults aside from verbose output, and storing the results from the clustering stage in a directory called `bin3c_clust`, the clustering is performed as follows:
 
 ```bash
-python2 ./bin3C cluster -v bin3c_out/contact_map.p.gz bin3c_clust
+# inside bin3C's virtual env
+bin/bin3C cluster -v bin3c_out/contact_map.p.gz bin3c_clust
 ```
 
 #### Output directory contents after stage 2
@@ -282,4 +200,3 @@ Good clustering and signal to noise. ![good map](https://drive.google.com/uc?id=
 
 Potential clustering errors and poor signal to noise.
 *( add bad heatmap )*
-
