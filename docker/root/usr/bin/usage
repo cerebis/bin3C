@@ -1,0 +1,8 @@
+#!/bin/sh
+cat <<EOF
+This is a qc3c image.
+
+Sample invocation:
+docker run -ti qc3c /bin/bash
+EOF
+
