@@ -32,9 +32,6 @@ def main():
     }
 
     global_parser = argparse.ArgumentParser(add_help=False)
-    global_parser.add_argument('-V', '--version', default=False, action='store_true',
-                               help='Show the application version')
-    global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
     global_parser.add_argument('--max-image', type=int, help='Maximum image size for plots [4000]')
@@ -45,9 +42,11 @@ def main():
     global_parser.add_argument('--min-signal', type=int, help='Minimum acceptable signal [5]')
 
     parser = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool')
+    parser.add_argument('-V', '--version', default=False, action='store_true', help='Version')
+    parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     subparsers = parser.add_subparsers(title='commands', dest='command', description='Valid commands',
                                        help='choose an analysis stage for further options')
-
+    subparsers.required = True
     cmd_mkmap = subparsers.add_parser('mkmap', parents=[global_parser],
                                       description='Create a new contact map from assembly sequences and Hi-C bam file.')
     cmd_cluster = subparsers.add_parser('cluster', parents=[global_parser],
