@@ -77,7 +77,7 @@ RUN dnf install -y \
         llvm \
         openblas \
         python2 \
-        xz &&
+        xz && \
     dnf clean all
 
 # copy over the installed python packages
