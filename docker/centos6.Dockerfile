@@ -1,19 +1,17 @@
 #
 # stage 1 - build
 #
-FROM fedora:29 as builder
+FROM centos:centos6 as builder
 MAINTAINER Matthew DeMaere "matt.demaere@gmail.com"
 
 # create up to date system
-RUN dnf update -y && \
-        dnf install -y \
+RUN yum update -y && \
+        yum install -y \
+            centos-release-scl \
             bzip2 \
             bzip2-libs \
             bzip2-devel \
             freetype-devel \
-            gcc \
-            gcc-c++ \
-            gcc-gfortran \
             git \
             libcurl-devel \
             libpng-devel \
@@ -28,10 +26,14 @@ RUN dnf update -y && \
             wget \
             xz-devel \
             zlib-devel && \
-        dnf clean all
+        yum install -y python27 devtoolset-6-gcc devtoolset-6-gcc-c++ devtoolset-6-gcc-gfortran && \
+        yum clean all -y
+
+# setup more current python and gcc support
+SHELL ["/usr/bin/scl", "enable",  "python27", "devtoolset-6"]
 
 # first update pip and install cython
-RUN pip2 install -U pip && pip2 install --user cython
+RUN pip2 install -U pip setuptools && pip2 install --user cython
 
 # install qc3C pgtk branch
 RUN pip2 install --user "numpy<1.15" && \
@@ -51,13 +53,13 @@ WORKDIR /usr/local
 RUN wget https://github.com/samtools/htslib/releases/download/1.9/htslib-1.9.tar.bz2 && \
     tar xjf htslib-1.9.tar.bz2
 WORKDIR /usr/local/htslib-1.9
-RUN make
+RUN ./configure && make
 
 WORKDIR /usr/local/
 RUN wget https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9.tar.bz2 && \
     tar xjf samtools-1.9.tar.bz2
 WORKDIR /usr/local/samtools-1.9
-RUN make
+RUN ./configure && make
 
 WORKDIR /opt
 RUN wget -O bbmap.tar.gz "https://downloads.sourceforge.net/project/bbmap/BBMap_38.44.tar.gz?r=https%3A%2F%2Fsourceforge.net%2Fprojects%2Fbbmap%2Ffiles%2Flatest%2Fdownload&ts=1555391525" && \
@@ -66,11 +68,12 @@ RUN wget -O bbmap.tar.gz "https://downloads.sourceforge.net/project/bbmap/BBMap_
 #
 # stage two - runtime
 #
-FROM fedora:29
+FROM centos:centos6
 
 # restore minimum runtime dependencies
-RUN dnf update -y && \
-    dnf install -y \
+RUN yum update -y && \
+    yum install -y \
+        centos-release-scl \
         bzip2 \
         freetype \
         java-1.8.0-openjdk \
@@ -79,27 +82,35 @@ RUN dnf update -y && \
         openblas \
         python2 \
         xz && \
-    dnf clean all
+    yum install -y python27 && \
+    yum clean all -y
 
 # copy over the installed python packages
-COPY --from=builder /root/.local/bin/bin3C /usr/bin/
-COPY --from=builder /root/.local/lib/python2.7 /usr/lib/python2.7/
+COPY --from=builder /opt/rh/python27/root /opt/rh/python27/root/
+COPY --from=builder /root/.local/bin/bin3C /opt/rh/python27/root/usr/bin/
+COPY --from=builder /root/.local/lib/python2.7/site-packages /opt/rh/python27/root/usr/lib/python2.7/site-packages/
 COPY --from=builder /usr/local/samtools-1.9/samtools /usr/local/bin/
 COPY --from=builder /usr/local/htslib-1.9/bgzip /usr/local/bin/
 COPY --from=builder /opt/bwa-0.7.17/bwa /usr/local/bin/
 COPY --from=builder /opt/bbmap /opt/bbmap/
-RUN ln -s /opt/bbmap/*sh /usr/local/bin/
 COPY --from=builder /opt/SPAdes-3.13.0-Linux /opt/SPAdes-3.13.0-Linux/
-RUN ln -s /opt/SPAdes-3.13.0-Linux/bin/* /usr/local/bin/
+RUN ln -s /opt/bbmap/*sh /usr/local/bin/ && \
+    ln -s /opt/SPAdes-3.13.0-Linux/bin/* /usr/local/bin/ && \
+    chmod 755 /opt/rh/python27/root/usr/lib/python2.7/site-packages
 
 # further setup
-COPY ./root/usr /usr/
+COPY ./root/ /
+
 ENV HOME=/opt/app-root/ \
-    PATH=/opt/app-root/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    PATH=/opt/app-root/bin:/opt/rh/python27/root/usr/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 RUN mkdir -p ${HOME}
 
 WORKDIR ${HOME}
+
+ENV BASH_ENV=/opt/app-root/etc/scl_enable \
+    ENV=/opt/app-root/etc/scl_enable \
+    PROMPT_COMMAND=". /opt/app-root/etc/scl_enable"
 
 # Set the default CMD to print the usage of the language image
 ENTRYPOINT ["/usr/bin/container-entrypoint"]

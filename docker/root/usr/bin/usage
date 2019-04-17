@@ -1,8 +1,7 @@
 #!/bin/sh
 cat <<EOF
-This is a qc3c image.
+This is a bin3C analysis environment.
 
 Sample invocation:
-docker run -ti qc3c /bin/bash
+docker run -it bin3c /bin/bash
 EOF
-
