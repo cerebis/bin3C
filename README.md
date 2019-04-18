@@ -5,22 +5,33 @@ Extract metagenome-assembled genomes (MAGs) from metagenomic data using Hi-C.
 
 To simplify the setup of a computational environment for metagenomic analysis with bin3C, we have recently published docker images which include all the neccessary tools to take raw shotgun and Hi-C reads through to metagenome-assembled genomes [cerebis/bin3c](https://cloud.docker.com/u/cerebis/repository/docker/cerebis/bin3c). These images include the primary tools we ourselves have chosen to use for read clean-up (bbtools), shotgun assembly (spades), Hi-C read mapping (bwa) and finally genome binning using bin3C. 
 
-In the future, we hope to add a useful workflow to chain these steps together, along with example data. 
+In the near future, we hope to add a useful workflow to chain these steps together along with example data with which to play. 
+
+### Image Flavours
 
 As we find ourselves needing to deploy bin3C on both up-to-date Linux distributions, as well as older systems, we have included two images.
 
-1. Up to date distributions: cerebis/bin3c:latest
-2. Older distributions: [cerebis/bin3c:centos6](hub.docker.c)
+1. Recent distributions `cerebis/bin3c:latest`
 
-In either case, users should be able to deploy these images either using Docker or Singularity. With Singularity, we reccomend that users specify a contained environment (`-c`) and a home directory (`-H`).
+   This image is based upon Fedora Release 29.
+    
+2. Older distributions `cerebis/bin3c:centos6`
 
-With Docker
+   This image is based upon Centos Release 6, which runs on the 2.6.x Linux kernel. If you attempt to use "bin3c:latest" and intead see an error message like "kernel too old", then you should try this image instead.
+
+Both images contain the same installed software and in either case, users should be able to deploy them using either Docker or Singularity. 
+
+### Deployment from Docker Hub
+
 ```
 docker pull cerebis/bin3c:latest
 docker run cerebis/bin3c:latest bin3C -h
 ```
 
-With Singularity
+### Deployment using Singularity
+
+A singularity image can be created directly from the docker images, after which the resulting image can be run within a Singularity container. **Please note:** we recommend that users specify a contained environment (-c) and a home directory (-H) when launcing the image.
+
 ```
 singularity build bin3c.img docker://cerebis/bin3c:latest
 singularity run -c -H $PWD:/home/user bin3c.img bin3C -h
