@@ -3,19 +3,14 @@ Extract metagenome-assembled genomes (MAGs) from metagenomic data using Hi-C.
 
 ## NEW - docker/singularity based analysis environment
 
-To simplify the setup of a bin3C computational environment for metagenomic analysis, we have recently published docker images which include all the neccessary tools to take raw shotgun and Hi-C reads through to metagenome-assembled genomes [cerebis/bin3c](https://cloud.docker.com/u/cerebis/repository/docker/cerebis/bin3c). These images include the primary tools we ourselves have chosen to take raw shotgun and Hi-C reads through to genome bins. 
+To simplify the setup of a computational environment for metagenomic analysis with bin3C, we have recently published docker images which include all the neccessary tools to take raw shotgun and Hi-C reads through to metagenome-assembled genomes [cerebis/bin3c](https://cloud.docker.com/u/cerebis/repository/docker/cerebis/bin3c). These images include the primary tools we ourselves have chosen to use for read clean-up (bbtools), shotgun assembly (spades), Hi-C read mapping (bwa) and finally genome binning using bin3C. 
 
-In the near future, this image will also include a complete workflow.
+In the future, we hope to add a useful workflow to chain these steps together, along with example data. 
 
-Two images are available, which differ in the age of the supported kernel.
+As we find ourselves needing to deploy bin3C on both up-to-date Linux distributions, as well as older systems, we have included two images.
 
-**Current distributions: cerebis/bin3c:latest**
-
-This image should support the majority of users and is based upon Fedora release 29.
-
-**Older distributions: cerebis/bin3c:centos6**
-
-This image supports unforutnately souls, whose computational environments may be getting out of date. Built upon Centos Release 6 and the 2.6 Linux kernel.
+1. Up to date distributions: cerebis/bin3c:latest
+2. Older distributions: [cerebis/bin3c:centos6](hub.docker.c)
 
 In either case, users should be able to deploy these images either using Docker or Singularity. With Singularity, we reccomend that users specify a contained environment (`-c`) and a home directory (`-H`).
 
