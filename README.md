@@ -1,6 +1,36 @@
 # bin3C
 Extract metagenome-assembled genomes (MAGs) from metagenomic data using Hi-C.
 
+## NEW - docker/singularity based analysis environment
+
+To simplify the setup of a bin3C computational environment for metagenomic analysis, we have recently published docker images which include all the neccessary tools to take raw shotgun and Hi-C reads through to metagenome-assembled genomes [cerebis/bin3c](https://cloud.docker.com/u/cerebis/repository/docker/cerebis/bin3c). These images include the primary tools we ourselves have chosen to take raw shotgun and Hi-C reads through to genome bins. 
+
+In the near future, this image will also include a complete workflow.
+
+Two images are available, which differ in the age of the supported kernel.
+
+**Current distributions: cerebis/bin3c:latest**
+
+This image should support the majority of users and is based upon Fedora release 29.
+
+**Older distributions: cerebis/bin3c:centos6**
+
+This image supports unforutnately souls, whose computational environments may be getting out of date. Built upon Centos Release 6 and the 2.6 Linux kernel.
+
+In either case, users should be able to deploy these images either using Docker or Singularity. With Singularity, we reccomend that users specify a contained environment (`-c`) and a home directory (`-H`).
+
+With Docker
+```
+docker pull cerebis/bin3c:latest
+docker run cerebis/bin3c:latest bin3C -h
+```
+
+With Singularity
+```
+singularity build bin3c.img docker://cerebis/bin3c:latest
+singularity run -c -H $PWD:/home/user bin3c.img bin3C -h
+```
+
 ## Introduction
 bin3C is a tool which attempts to extract so called metagenome-assembled genones or MAGs from metagenomic shotgun sequencing experiments. The major prerequisite for achieving this is an accompanying Hi-C sequencing data-set.
 
