@@ -2,18 +2,14 @@ from proxigenomics_toolkit.contact_map import *
 from proxigenomics_toolkit.exceptions import ApplicationException
 from proxigenomics_toolkit.io_utils import load_object, save_object
 from proxigenomics_toolkit.misc_utils import make_random_seed
+from bin3C._version import version_stamp
 import logging
-
-__version__ = '0.2a2'
 
 
 def main():
 
     import argparse
     import sys
-
-    def mk_version():
-        return 'bin3C v{}'.format(__version__)
 
     def or_default(v, default):
         if v is not None:
@@ -98,7 +94,7 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        print mk_version()
+        print version_stamp()
         sys.exit(0)
 
     try:
@@ -137,7 +133,7 @@ def main():
     root.addHandler(fh)
 
     # Add some environmental details
-    logger.debug(mk_version())
+    logger.debug(version_stamp(False))
     logger.debug(sys.version.replace('\n', ' '))
     logger.debug('Command line: {}'.format(' '.join(sys.argv)))
 
