@@ -6,28 +6,30 @@ MAINTAINER Matthew DeMaere "matt.demaere@gmail.com"
 
 # create up to date system
 RUN yum update -y && \
-        yum install -y \
-            centos-release-scl \
-            bzip2 \
-            bzip2-libs \
-            bzip2-devel \
-            freetype-devel \
-            git \
-            libcurl-devel \
-            libpng-devel \
-            llvm \
-            ncurses-devel \
-            openblas-devel \
-            openssl-devel \
-            python2 \
-            python2-devel \
-            python2-pip \
-            redhat-rpm-config \
-            wget \
-            xz-devel \
-            zlib-devel && \
-        yum install -y python27 devtoolset-6-gcc devtoolset-6-gcc-c++ devtoolset-6-gcc-gfortran && \
-        yum clean all -y
+    yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-6.noarch.rpm && \
+    yum install -y \
+        centos-release-scl \
+        bzip2 \
+        bzip2-libs \
+        bzip2-devel \
+        freetype-devel \
+        git \
+        libcurl-devel \
+        libpng-devel \
+        libgomp \
+        llvm \
+        ncurses-devel \
+        openblas-devel \
+        openssl-devel \
+        python2 \
+        python2-devel \
+        python2-pip \
+        redhat-rpm-config \
+        wget \
+        xz-devel \
+        zlib-devel && \
+    yum install -y python27 devtoolset-6-gcc devtoolset-6-gcc-c++ devtoolset-6-gcc-gfortran && \
+    yum clean all -y
 
 # setup more current python and gcc support
 SHELL ["/usr/bin/scl", "enable",  "python27", "devtoolset-6"]
@@ -72,18 +74,21 @@ FROM centos:centos6
 
 # restore minimum runtime dependencies
 RUN yum update -y && \
+    yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-6.noarch.rpm && \
     yum install -y \
         centos-release-scl \
         bzip2 \
         freetype \
         java-1.8.0-openjdk \
         libpng \
+        libgomp \
         llvm \
         openblas \
         python2 \
         xz && \
     yum install -y python27 && \
-    yum clean all -y
+    yum clean all -y && \
+    ldconfig
 
 # copy over the installed python packages
 COPY --from=builder /opt/rh/python27/root /opt/rh/python27/root/

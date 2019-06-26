@@ -75,6 +75,7 @@ RUN dnf update -y && \
         freetype \
         java-1.8.0-openjdk \
         libpng \
+        libgomp \
         llvm \
         openblas \
         python2 \
