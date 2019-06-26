@@ -28,6 +28,7 @@ def main():
     }
 
     global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
     global_parser.add_argument('--max-image', type=int, help='Maximum image size for plots [4000]')
@@ -37,12 +38,13 @@ def main():
                                help='Minimum acceptable reference length [1000]')
     global_parser.add_argument('--min-signal', type=int, help='Minimum acceptable signal [5]')
 
-    parser = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool')
-    parser.add_argument('-V', '--version', default=False, action='store_true', help='Version')
-    parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
+    parser_top = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool')
+    parser_top.add_argument('-V', '--version', default=False, action='store_true', help='Version')
+
+    parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(title='commands', dest='command', description='Valid commands',
                                        help='choose an analysis stage for further options')
-    subparsers.required = True
+    subparsers.required = False
     cmd_mkmap = subparsers.add_parser('mkmap', parents=[global_parser],
                                       description='Create a new contact map from assembly sequences and Hi-C bam file.')
     cmd_cluster = subparsers.add_parser('cluster', parents=[global_parser],
@@ -91,11 +93,17 @@ def main():
     cmd_cluster.add_argument('MAP', help='Contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
 
-    args = parser.parse_args()
+    args, extras = parser_top.parse_known_args()
 
     if args.version:
         print version_stamp()
         sys.exit(0)
+
+    if len(extras) == 0:
+        parser.print_usage()
+        sys.exit(0)
+
+    parser.parse_args(extras, namespace=args)
 
     try:
         make_dir(args.OUTDIR, args.clobber)
