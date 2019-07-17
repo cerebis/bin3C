@@ -1,7 +1,7 @@
 biopython
 matplotlib
 networkx<2
-numba
+numba<0.44
 numpy<1.15.0
 pandas
 pysam
