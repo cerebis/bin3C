@@ -269,7 +269,7 @@ def cluster_report(contact_map, clustering, source_fasta=None, is_spades=True):
                                          ('gc', np.float),
                                          ('cov', np.float)])
             else:
-                report = np.array(zip(_len, _gc, _cov),
+                report = np.array(zip(_len, _gc),
                                   dtype=[('length', np.int),
                                          ('gc', np.float)])
             clustering[cl_id]['report'] = report
@@ -479,24 +479,41 @@ def write_report(fname, clustering):
         return x[x.cumsum() > x.sum() / 2][0]
 
     df = []
+    has_cov = False
     for k, v in clustering.iteritems():
         try:
             sr = v['report']
 
-            df.append([k,
-                       v['name'],
-                       len(v['seq_ids']),
-                       v['extent'],
-                       _n50(sr['length']),
-                       _expect(sr['length'], sr['gc']), sr['gc'].mean(), np.median(sr['gc']), sr['gc'].std(),
-                       _expect(sr['length'], sr['cov']), sr['cov'].mean(), np.median(sr['cov']), sr['cov'].std()])
+            _cl_info = [k,
+                        v['name'],
+                        len(v['seq_ids']),
+                        v['extent'],
+                        _n50(sr['length']),
+                        _expect(sr['length'],
+                        sr['gc']),
+                        sr['gc'].mean(),
+                        np.median(sr['gc']),
+                        sr['gc'].std()]
+
+            # if coverage information exists, add statistics to the table
+            if 'cov' in sr.dtype.names:
+                has_cov = True
+                _cl_info.extend([_expect(sr['length'],
+                                sr['cov']),
+                                sr['cov'].mean(),
+                                np.median(sr['cov']),
+                                sr['cov'].std()])
+
+            df.append(_cl_info)
 
         except KeyError:
             raise NoReportException(k)
 
-    df = pandas.DataFrame(df, columns=['id', 'name', 'size', 'extent', 'n50',
-                                       'gc_expect', 'gc_mean', 'gc_median', 'gc_std',
-                                       'cov_expect', 'cov_mean', 'cov_median', 'cov_std'])
+    _cols = ['id', 'name', 'size', 'extent', 'n50', 'gc_expect', 'gc_mean', 'gc_median', 'gc_std']
+    if has_cov:
+        _cols.extend(['cov_expect', 'cov_mean', 'cov_median', 'cov_std'])
+
+    df = pandas.DataFrame(df, columns=_cols)
     df.set_index('id', inplace=True)
     df.to_csv(fname, sep=',')
 
