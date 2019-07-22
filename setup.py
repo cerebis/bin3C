@@ -25,7 +25,7 @@ setuptools.setup(
     author_email='matt.demaere@gmail.com',
     platforms='Linux-86_x64',
     packages=setuptools.find_packages(),
-    url='https://github.com/cerebis/scaffold3C',
+    url='https://github.com/cerebis/bin3C',
     license='GNU Affero General Public License v3',
 
     install_requires=['proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@master#egg=proxigenomics_toolkit'],
