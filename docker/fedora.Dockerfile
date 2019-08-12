@@ -33,7 +33,7 @@ RUN dnf update -y && \
 # first update pip and install cython
 RUN pip2 install -U pip && pip2 install --user cython
 
-# install qc3C pgtk branch
+# install bin3C pgtk branch
 RUN pip2 install --user "numpy<1.15" && \
     pip2 install --user git+https://github.com/cerebis/bin3C@pgtk
 

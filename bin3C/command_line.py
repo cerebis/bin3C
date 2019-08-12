@@ -78,8 +78,8 @@ def main():
     cmd_cluster.add_argument('-s', '--seed', default=None, help='Random seed')
     cmd_cluster.add_argument('--no-report', default=False, action='store_true',
                              help='Do not generate a cluster report')
-    cmd_cluster.add_argument('--no-spades', default=False, action='store_true',
-                             help='Assembly was not done using SPAdes')
+    cmd_cluster.add_argument('--assembler', choices=['generic', 'spades', 'megahit'], default='generic',
+                             help='Assembly software used to create contigs')
     cmd_cluster.add_argument('--no-plot', default=False, action='store_true',
                              help='Do not generate a clustered heatmap')
     cmd_cluster.add_argument('--no-fasta', default=False, action='store_true',
@@ -210,7 +210,7 @@ def main():
             # cluster the entire map
             clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR)
             # generate report per cluster
-            cluster_report(cm, clustering, is_spades=not args.no_spades)
+            cluster_report(cm, clustering, assembler=args.assembler)
             # write MCL clustering file
             write_mcl(cm, os.path.join(args.OUTDIR, 'clustering.mcl'), clustering)
             # serialize full clustering object
@@ -229,7 +229,7 @@ def main():
                 # the entire clustering
                 plot_clusters(cm, os.path.join(args.OUTDIR, 'cluster_plot.png'), clustering,
                               max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
-                                                        ordered_only=False, simple=False, permute=True)
+                              ordered_only=False, simple=False, permute=True)
 
     except ApplicationException as ex:
         import sys
