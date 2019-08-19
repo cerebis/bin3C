@@ -210,7 +210,7 @@ def main():
             # cluster the entire map
             clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR)
             # generate report per cluster
-            cluster_report(cm, clustering, assembler=args.assembler)
+            cluster_report(cm, clustering, assembler=args.assembler, source_fasta=args.fasta)
             # write MCL clustering file
             write_mcl(cm, os.path.join(args.OUTDIR, 'clustering.mcl'), clustering)
             # serialize full clustering object
