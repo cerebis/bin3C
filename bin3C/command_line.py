@@ -31,14 +31,15 @@ def main():
     global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
-    global_parser.add_argument('--max-image', type=int, help='Maximum image size for plots [4000]')
-    global_parser.add_argument('--min-extent', type=int,
+    global_parser.add_argument('--min-extent', metavar='NBASES', type=int,
                                help='Minimum cluster extent used in output [50000]')
-    global_parser.add_argument('--min-reflen', type=int,
+    global_parser.add_argument('--min-reflen', metavar='NBASES', type=int,
                                help='Minimum acceptable reference length [1000]')
-    global_parser.add_argument('--min-signal', type=int, help='Minimum acceptable signal [5]')
+    global_parser.add_argument('--min-signal', metavar='COUNTS', type=int,
+                               help='Minimum acceptable signal [5]')
 
-    parser_top = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool')
+    parser_top = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool',
+                                         add_help=False)
     parser_top.add_argument('-V', '--version', default=False, action='store_true', help='Version')
 
     parser = argparse.ArgumentParser()
@@ -53,19 +54,19 @@ def main():
     """
     make and save the contact map object
     """
-    cmd_mkmap.add_argument('--eta', default=False, action='store_true',
-                           help='Pre-count bam alignments to provide an ETA')
-    cmd_mkmap.add_argument('--bin-size', type=int,
+    cmd_mkmap.add_argument('--bin-size', metavar='NBASES', type=int,
                            help='Size of bins for windows extent maps [None]')
-    cmd_mkmap.add_argument('--tip-size', type=int, default=None,
+    cmd_mkmap.add_argument('--tip-size', metavar='NBASES', type=int, default=None,
                            help='The size of the region used when tracking only the ends '
                                 'of contigs (bp) [Experimental] [None]')
-    cmd_mkmap.add_argument('--min-insert', type=int,
+    cmd_mkmap.add_argument('--min-insert', metavar='NBASES', type=int,
                            help='Minimum pair separation [None]')
-    cmd_mkmap.add_argument('--min-mapq', type=int,
+    cmd_mkmap.add_argument('--min-mapq', metavar='INT', type=int,
                            help='Minimum acceptable mapping quality [60]')
-    cmd_mkmap.add_argument('--strong', type=int,
+    cmd_mkmap.add_argument('--strong', metavar='INT', type=int,
                            help='Accepted alignments must being N matches [10]')
+    cmd_mkmap.add_argument('--eta', default=False, action='store_true',
+                           help='Count bam alignments to provide an estimated processing time')
     cmd_mkmap.add_argument('-e', '--enzyme', metavar='NEB_NAME', required=True, action='append',
                            help='Case-sensitive NEB enzyme name. Use multiple times for multiple enzymes')
     cmd_mkmap.add_argument('FASTA', help='Reference fasta sequence')
@@ -75,7 +76,8 @@ def main():
     """
     cluster the map and save results
     """
-    cmd_cluster.add_argument('-s', '--seed', default=None, help='Random seed')
+    cmd_cluster.add_argument('-s', '--seed', metavar='INT', default=None, help='Random seed')
+    cmd_cluster.add_argument('--max-image', metavar='PIXELS', type=int, help='Maximum image size for plots [4000]')
     cmd_cluster.add_argument('--no-report', default=False, action='store_true',
                              help='Do not generate a cluster report')
     cmd_cluster.add_argument('--assembler', choices=['generic', 'spades', 'megahit'], default='generic',
@@ -88,8 +90,10 @@ def main():
                              help='Only write FASTA for clusters longer than min_extent')
     # cmd_cluster.add_argument('--algo', default='infomap', choices=['infomap', 'louvain', 'mcl', 'slm', 'simap'],
     #                          help='Clustering algorithm to apply [infomap]')
-    cmd_cluster.add_argument('--fasta', default=None,
+    cmd_cluster.add_argument('--fasta', metavar='PATH', default=None,
                              help='Alternative location of source FASTA from that supplied during mkmap')
+    cmd_cluster.add_argument('--n-iter', '-N', metavar="INT", default=None, type=int,
+                             help='Number of iterations for clustering optimisation [10]')
     cmd_cluster.add_argument('MAP', help='Contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
 
@@ -208,7 +212,7 @@ def main():
                 cm.set_primary_acceptance_mask(min_sig=cm.min_reflen, min_len=cm.min_len, update=True)
 
             # cluster the entire map
-            clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR)
+            clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR, n_iter=args.n_iter)
             # generate report per cluster
             cluster_report(cm, clustering, assembler=args.assembler, source_fasta=args.fasta)
             # write MCL clustering file

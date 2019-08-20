@@ -1,4 +1,4 @@
-__version__ = '0.3.1'
+__version__ = '0.3.2'
 
 __copyright__ = """Copyright (C) 2019 Matthew Z DeMaere
 This is free software.  You may redistribute copies of it under the terms of
