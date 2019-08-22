@@ -243,7 +243,7 @@ def main():
                 remask = True
 
             if remask:
-                cm.set_primary_acceptance_mask(min_sig=cm.min_reflen, min_len=cm.min_len, update=True)
+                cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
 
             # cluster the entire map
             clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR, n_iter=args.n_iter)
