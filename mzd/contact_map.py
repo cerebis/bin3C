@@ -610,17 +610,23 @@ class ContactMap:
         import tqdm
 
         def _simple_match(r):
-            return not r.is_unmapped and r.mapq >= _mapq
+            return r.mapping_quality >= _mapq
 
         def _strong_match(r):
+            if r.mapping_quality < _mapq or r.cigarstring is None:
+                return False
             cig = r.cigartuples[-1] if r.is_reverse else r.cigartuples[0]
-            return (r.mapping_quality >= _mapq and
-                    not r.is_secondary and
-                    not r.is_supplementary and
-                    cig[0] == 0 and cig[1] >= self.strong)
+            return cig[0] == 0 and cig[1] >= self.strong
 
         # set-up match call
         _matcher = _strong_match if self.strong else _simple_match
+
+        def next_informative(_bam_iter, _pbar):
+            while True:
+                r = _bam_iter.next()
+                _pbar.update()
+                if not r.is_unmapped and not r.is_secondary and not r.is_supplementary:
+                    return r
 
         def _on_tip_withlocs(p1, p2, l1, l2, _tip_size):
             tailhead_mat = np.zeros((2, 2), dtype=np.uint32)
@@ -714,12 +720,10 @@ class ContactMap:
             while True:
 
                 try:
-                    r1 = bam_iter.next()
-                    pbar.update()
+                    r1 = next_informative(bam_iter, pbar)
                     while True:
                         # read records until we get a pair
-                        r2 = bam_iter.next()
-                        pbar.update()
+                        r2 = next_informative(bam_iter, pbar)
                         if r1.query_name == r2.query_name:
                             break
                         r1 = r2
