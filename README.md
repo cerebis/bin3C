@@ -179,14 +179,17 @@ All files from this stage will be stored in the output directory, including a de
 
 **5. Cluster the resulting contact map into genome bins**
 
-After a map has been created, the second stage of analysis is clustering the map from stage one. 
+After a map has been created, the second stage of analysis is to cluster the map we just produced in stage one. 
 
-Using defaults aside from verbose output, and storing the results from the clustering stage in a directory called `bin3c_clust`, the clustering is performed as follows:
+By default, bin3C assumes no knowledge about the assembly software used to produce the contigs analysed in stage one. If you have elected to use either SPAdes or Megahit, then bin3C can be informed of this fact. In doing so, bin3C will extract supplied coverage details from the contig sequences and per-cluster coverage statistics will be provided in the clustering report (`cluster_report.cvs`). 
+
+Assuming SPAdes was used as the assembler and storing the output from the clustering stage in a directory called `bin3c_clust`, the analysis is performed as follows:
 
 ```bash
 # inside bin3C's virtual env
-bin/bin3C cluster -v bin3c_out/contact_map.p.gz bin3c_clust
+bin/bin3C cluster -v --assembler spades bin3c_out/contact_map.p.gz bin3c_clust
 ```
+
 
 #### Output directory contents after stage 2
 
