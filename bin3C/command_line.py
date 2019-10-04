@@ -27,18 +27,22 @@ def main():
         'strong': 10
     }
 
+    def required_length(nmin):
+        class RequiredLength(argparse.Action):
+            def __call__(self, parser, args, values, option_string=None):
+                if len(values) < nmin:
+                    msg = 'argument "{f}" requires at least {nmin} arguments'.format(f=self.dest, nmin=nmin)
+                    raise argparse.ArgumentTypeError(msg)
+                setattr(args, self.dest, values)
+        return RequiredLength
+
     global_parser = argparse.ArgumentParser(add_help=False)
     global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
-    global_parser.add_argument('--max-image', type=int, help='Maximum image size for plots [4000]')
-    global_parser.add_argument('--min-extent', type=int,
-                               help='Minimum cluster extent used in output [50000]')
-    global_parser.add_argument('--min-reflen', type=int,
-                               help='Minimum acceptable reference length [1000]')
-    global_parser.add_argument('--min-signal', type=int, help='Minimum acceptable signal [5]')
 
-    parser_top = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool')
+    parser_top = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool',
+                                         add_help=False)
     parser_top.add_argument('-V', '--version', default=False, action='store_true', help='Version')
 
     parser = argparse.ArgumentParser()
@@ -47,25 +51,33 @@ def main():
     subparsers.required = False
     cmd_mkmap = subparsers.add_parser('mkmap', parents=[global_parser],
                                       description='Create a new contact map from assembly sequences and Hi-C bam file.')
+    cmd_combine = subparsers.add_parser('combine', parents=[global_parser],
+                                        description='Additively combine contact maps derived from the same assembly.')
     cmd_cluster = subparsers.add_parser('cluster', parents=[global_parser],
                                         description='Cluster an existing contact map into genome bins.')
 
     """
     make and save the contact map object
     """
-    cmd_mkmap.add_argument('--eta', default=False, action='store_true',
-                           help='Pre-count bam alignments to provide an ETA')
-    cmd_mkmap.add_argument('--bin-size', type=int,
+    cmd_mkmap.add_argument('--bin-size', metavar='NBASES', type=int,
                            help='Size of bins for windows extent maps [None]')
-    cmd_mkmap.add_argument('--tip-size', type=int, default=None,
+    cmd_mkmap.add_argument('--tip-size', metavar='NBASES', type=int, default=None,
                            help='The size of the region used when tracking only the ends '
-                                'of contigs (bp) [Experimental] [None]')
-    cmd_mkmap.add_argument('--min-insert', type=int,
+                                'of contigs [Experimental] [None]')
+    cmd_mkmap.add_argument('--min-extent', metavar='NBASES', type=int,
+                           help='Minimum cluster extent used in output [50000]')
+    cmd_mkmap.add_argument('--min-reflen', metavar='NBASES', type=int,
+                           help='Minimum acceptable reference length [1000]')
+    cmd_mkmap.add_argument('--min-signal', metavar='COUNTS', type=int,
+                           help='Minimum acceptable signal [5]')
+    cmd_mkmap.add_argument('--min-insert', metavar='NBASES', type=int,
                            help='Minimum pair separation [None]')
-    cmd_mkmap.add_argument('--min-mapq', type=int,
+    cmd_mkmap.add_argument('--min-mapq', metavar='INT', type=int,
                            help='Minimum acceptable mapping quality [60]')
-    cmd_mkmap.add_argument('--strong', type=int,
+    cmd_mkmap.add_argument('--strong', metavar='INT', type=int,
                            help='Accepted alignments must being N matches [10]')
+    cmd_mkmap.add_argument('--eta', default=False, action='store_true',
+                           help='Count bam alignments to provide an estimated processing time')
     cmd_mkmap.add_argument('-e', '--enzyme', metavar='NEB_NAME', required=True, action='append',
                            help='Case-sensitive NEB enzyme name. Use multiple times for multiple enzymes')
     cmd_mkmap.add_argument('FASTA', help='Reference fasta sequence')
@@ -73,13 +85,26 @@ def main():
     cmd_mkmap.add_argument('OUTDIR', help='Output directory')
 
     """
+    combine contact maps
+    """
+    cmd_combine.add_argument('-o', dest='OUTDIR', required=True, help='Output directory')
+    cmd_combine.add_argument('MAP', nargs='+', help='Contact maps to combine', action=required_length(2))
+
+    """
     cluster the map and save results
     """
-    cmd_cluster.add_argument('-s', '--seed', default=None, help='Random seed')
+    cmd_cluster.add_argument('-s', '--seed', metavar='INT', default=None, help='Random seed')
+    cmd_cluster.add_argument('--min-extent', metavar='NBASES', type=int,
+                             help='Minimum cluster extent used in output [50000]')
+    cmd_cluster.add_argument('--min-reflen', metavar='NBASES', type=int,
+                             help='Minimum acceptable reference length [1000]')
+    cmd_cluster.add_argument('--min-signal', metavar='COUNTS', type=int,
+                             help='Minimum acceptable signal [5]')
+    cmd_cluster.add_argument('--max-image', metavar='PIXELS', type=int, help='Maximum image size for plots [4000]')
     cmd_cluster.add_argument('--no-report', default=False, action='store_true',
                              help='Do not generate a cluster report')
-    cmd_cluster.add_argument('--no-spades', default=False, action='store_true',
-                             help='Assembly was not done using SPAdes')
+    cmd_cluster.add_argument('--assembler', choices=['generic', 'spades', 'megahit'], default='generic',
+                             help='Assembly software used to create contigs')
     cmd_cluster.add_argument('--no-plot', default=False, action='store_true',
                              help='Do not generate a clustered heatmap')
     cmd_cluster.add_argument('--no-fasta', default=False, action='store_true',
@@ -88,8 +113,10 @@ def main():
                              help='Only write FASTA for clusters longer than min_extent')
     # cmd_cluster.add_argument('--algo', default='infomap', choices=['infomap', 'louvain', 'mcl', 'slm', 'simap'],
     #                          help='Clustering algorithm to apply [infomap]')
-    cmd_cluster.add_argument('--fasta', default=None,
+    cmd_cluster.add_argument('--fasta', metavar='PATH', default=None,
                              help='Alternative location of source FASTA from that supplied during mkmap')
+    cmd_cluster.add_argument('--n-iter', '-N', metavar="INT", default=None, type=int,
+                             help='Number of iterations for clustering optimisation [10]')
     cmd_cluster.add_argument('MAP', help='Contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
 
@@ -179,6 +206,17 @@ def main():
             logger.info('Saving contact map instance')
             save_object(os.path.join(args.OUTDIR, 'contact_map.p'), cm)
 
+        elif args.command == 'combine':
+            cm_summed = None
+            for cm_file in args.MAP:
+                logger.info('Loading contact map: {}'.format(cm_file))
+                if cm_summed is None:
+                    cm_summed = load_object(cm_file)
+                else:
+                    cm_summed.append_map(load_object(cm_file))
+            logger.info('Saving combined map')
+            save_object(os.path.join(args.OUTDIR, 'combined_map.p'), cm_summed)
+
         elif args.command == 'cluster':
 
             if not args.seed:
@@ -205,12 +243,12 @@ def main():
                 remask = True
 
             if remask:
-                cm.set_primary_acceptance_mask(min_sig=cm.min_reflen, min_len=cm.min_len, update=True)
+                cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
 
             # cluster the entire map
-            clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR)
+            clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR, n_iter=args.n_iter)
             # generate report per cluster
-            cluster_report(cm, clustering, is_spades=not args.no_spades)
+            cluster_report(cm, clustering, assembler=args.assembler, source_fasta=args.fasta)
             # write MCL clustering file
             write_mcl(cm, os.path.join(args.OUTDIR, 'clustering.mcl'), clustering)
             # serialize full clustering object
@@ -229,7 +267,7 @@ def main():
                 # the entire clustering
                 plot_clusters(cm, os.path.join(args.OUTDIR, 'cluster_plot.png'), clustering,
                               max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
-                                                        ordered_only=False, simple=False, permute=True)
+                              ordered_only=False, simple=False, permute=True)
 
     except ApplicationException as ex:
         import sys
