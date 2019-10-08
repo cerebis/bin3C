@@ -55,6 +55,8 @@ def main():
                                         description='Additively combine contact maps derived from the same assembly.')
     cmd_cluster = subparsers.add_parser('cluster', parents=[global_parser],
                                         description='Cluster an existing contact map into genome bins.')
+    cmd_extract = subparsers.add_parser('extract', parents=[global_parser],
+                                        description='Extract a representation of single cluster')
 
     """
     make and save the contact map object
@@ -87,7 +89,7 @@ def main():
     """
     combine contact maps
     """
-    cmd_combine.add_argument('-o', dest='OUTDIR', required=True, help='Output directory')
+    cmd_combine.add_argument('OUTDIR', help='Output directory')
     cmd_combine.add_argument('MAP', nargs='+', help='Contact maps to combine', action=required_length(2))
 
     """
@@ -117,8 +119,21 @@ def main():
                              help='Alternative location of source FASTA from that supplied during mkmap')
     cmd_cluster.add_argument('--n-iter', '-N', metavar="INT", default=None, type=int,
                              help='Number of iterations for clustering optimisation [10]')
-    cmd_cluster.add_argument('MAP', help='Contact map')
+    cmd_cluster.add_argument('MAP', help='bin3C contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
+
+    """
+    extract a single cluster
+    """
+
+    cmd_extract.add_argument('--use-extent', default=False, action='store_true',
+                             help='For plots use extent map rather than sequence map if available')
+    cmd_extract.add_argument('-f', '--format', choices=['graph', 'plot'], required=True,
+                             help='Select output format [plot]')
+    cmd_extract.add_argument('MAP', help='bin3C contact map')
+    cmd_extract.add_argument('CLUSTERING', help='bin3C clustering object')
+    cmd_extract.add_argument('OUTDIR', help='Output directory')
+    cmd_extract.add_argument('CLUSTER_ID', nargs='+', help='Cluster id (eg. CL_0010)')
 
     args, extras = parser_top.parse_known_args()
 
@@ -268,6 +283,39 @@ def main():
                 plot_clusters(cm, os.path.join(args.OUTDIR, 'cluster_plot.png'), clustering,
                               max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
                               ordered_only=False, simple=False, permute=True)
+
+        elif args.command == 'extract':
+
+            logger.info('Loading contact map from: {}'.format(args.MAP))
+            cm = load_object(args.MAP)
+
+            logger.info('Loading clustering solution from: {}'.format(args.CLUSTERING))
+            clustering = load_object(args.CLUSTERING)
+
+            cm.set_primary_acceptance_mask(update=True)
+            cm.prepare_seq_map(norm=True, bisto=True)
+
+            # Convert public string ids to internal 0-based integer ids
+            cluster_ids = [int(_id.split('_')[-1]) - 1 for _id in args.CLUSTER_ID]
+            logger.info('Extracting {} clusters'.format(len(cluster_ids)))
+
+            if args.format == 'plot':
+
+                if args.use_extent and cm.extent_map is None:
+                    logger.error('An extent map was not generated when creating the specified contact map')
+
+                plot_clusters(cm, os.path.join(args.OUTDIR, 'extracted.png'), clustering,
+                              permute=True, cl_list=cluster_ids, simple=not args.use_extent)
+
+            elif args.format == 'graph':
+
+                if args.use_extent:
+                    logger.warning('Option use-extent has no affect when the output is a graph')
+
+                g = to_graph(cm, norm=True, bisto=True, extern_ids=True, scale=False,
+                             clustering=clustering, cl_list=cluster_ids)
+
+                nx.write_graphml(g, os.path.join(args.OUTDIR, 'extracted.graphml'))
 
     except ApplicationException as ex:
         import sys
