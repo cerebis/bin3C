@@ -126,9 +126,11 @@ def main():
     extract a single cluster
     """
 
+    cmd_extract.add_argument('--max-image', metavar='PIXELS', type=int, help='Maximum image size for plots [4000]')
     cmd_extract.add_argument('--use-extent', default=False, action='store_true',
                              help='For plots use extent map rather than sequence map if available')
-    cmd_extract.add_argument('-f', '--format', choices=['graph', 'plot'], required=True,
+    cmd_extract.add_argument('-b', '--bam', help='Alternative location of source BAM file')
+    cmd_extract.add_argument('-f', '--format', choices=['graph', 'plot', 'bam'], default='plot',
                              help='Select output format [plot]')
     cmd_extract.add_argument('MAP', help='bin3C contact map')
     cmd_extract.add_argument('CLUSTERING', help='bin3C clustering object')
@@ -292,9 +294,6 @@ def main():
             logger.info('Loading clustering solution from: {}'.format(args.CLUSTERING))
             clustering = load_object(args.CLUSTERING)
 
-            cm.set_primary_acceptance_mask(update=True)
-            cm.prepare_seq_map(norm=True, bisto=True)
-
             # Convert public string ids to internal 0-based integer ids
             cluster_ids = [int(_id.split('_')[-1]) - 1 for _id in args.CLUSTER_ID]
             logger.info('Extracting {} clusters'.format(len(cluster_ids)))
@@ -304,18 +303,30 @@ def main():
                 if args.use_extent and cm.extent_map is None:
                     logger.error('An extent map was not generated when creating the specified contact map')
 
+                cm.set_primary_acceptance_mask(update=True)
+                cm.prepare_seq_map(norm=True, bisto=True)
+
                 plot_clusters(cm, os.path.join(args.OUTDIR, 'extracted.png'), clustering,
-                              permute=True, cl_list=cluster_ids, simple=not args.use_extent)
+                              max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
+                              ordered_only=False, permute=True, simple=not args.use_extent, cl_list=cluster_ids)
 
             elif args.format == 'graph':
 
-                if args.use_extent:
-                    logger.warning('Option use-extent has no affect when the output is a graph')
+                cm.set_primary_acceptance_mask(update=True)
+                cm.prepare_seq_map(norm=True, bisto=True)
 
                 g = to_graph(cm, norm=True, bisto=True, extern_ids=True, scale=False,
                              clustering=clustering, cl_list=cluster_ids)
 
                 nx.write_graphml(g, os.path.join(args.OUTDIR, 'extracted.graphml'))
+
+            elif args.format == 'bam':
+
+                out_file, n_refs, n_pairs = extract_bam(cm, clustering, args.OUTDIR, cluster_ids, bam_file=args.bam)
+                logger.info('Output BAM {} contains {:,} references and {:,} pairs'.format(out_file, n_refs, n_pairs))
+
+            else:
+                raise ApplicationException('Unknown format option {}'.format(args.format))
 
     except ApplicationException as ex:
         import sys
