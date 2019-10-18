@@ -3,20 +3,31 @@ from proxigenomics_toolkit.exceptions import ApplicationException
 from proxigenomics_toolkit.io_utils import load_object, save_object
 from proxigenomics_toolkit.misc_utils import make_random_seed
 from bin3C._version import version_stamp
+
+import argparse
 import logging
+import sys
+
+
+def or_default(v, default):
+    if v is not None:
+        assert isinstance(v, type(default)), \
+            'supplied value [{}] is not of the correct type [{}]'.format(v, type(default))
+        return v
+    return default
+
+
+def required_length(n_min):
+    class RequiredLength(argparse.Action):
+        def __call__(self, parser, args, values, option_string=None):
+            if len(values) < n_min:
+                msg = 'argument "{f}" requires at least {nmin} arguments'.format(f=self.dest, nmin=n_min)
+                raise argparse.ArgumentTypeError(msg)
+            setattr(args, self.dest, values)
+    return RequiredLength
 
 
 def main():
-
-    import argparse
-    import sys
-
-    def or_default(v, default):
-        if v is not None:
-            assert isinstance(v, type(default)), \
-                'supplied value [{}] is not of the correct type [{}]'.format(v, type(default))
-            return v
-        return default
 
     runtime_defaults = {
         'min_reflen': 1000,
@@ -26,15 +37,6 @@ def main():
         'min_mapq': 60,
         'strong': 10
     }
-
-    def required_length(nmin):
-        class RequiredLength(argparse.Action):
-            def __call__(self, parser, args, values, option_string=None):
-                if len(values) < nmin:
-                    msg = 'argument "{f}" requires at least {nmin} arguments'.format(f=self.dest, nmin=nmin)
-                    raise argparse.ArgumentTypeError(msg)
-                setattr(args, self.dest, values)
-        return RequiredLength
 
     global_parser = argparse.ArgumentParser(add_help=False)
     global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
@@ -61,6 +63,8 @@ def main():
     """
     make and save the contact map object
     """
+    cmd_mkmap.add_argument('--threads', metavar='INT', type=int, default=1,
+                           help='Number of IO threads used when accessing BAM files [1]')
     cmd_mkmap.add_argument('--bin-size', metavar='NBASES', type=int,
                            help='Size of bins for windows extent maps [None]')
     cmd_mkmap.add_argument('--tip-size', metavar='NBASES', type=int, default=None,
@@ -126,6 +130,8 @@ def main():
     extract a single cluster
     """
 
+    cmd_extract.add_argument('--threads', metavar='INT', type=int, default=1,
+                             help='Number of IO threads for accessing BAM file [1]')
     cmd_extract.add_argument('--max-image', metavar='PIXELS', type=int, help='Maximum image size for plots [4000]')
     cmd_extract.add_argument('--use-extent', default=False, action='store_true',
                              help='For plots use extent map rather than sequence map if available')
@@ -214,7 +220,8 @@ def main():
                             strong=or_default(args.strong, runtime_defaults['strong']),
                             bin_size=args.bin_size,
                             tip_size=args.tip_size,
-                            precount=args.eta)
+                            precount=args.eta,
+                            threads=args.threads)
 
             if cm.is_empty():
                 logger.info('Stopping as the map is empty')
@@ -322,13 +329,13 @@ def main():
 
             elif args.format == 'bam':
 
-                out_file, n_refs, n_pairs = extract_bam(cm, clustering, args.OUTDIR, cluster_ids, bam_file=args.bam)
+                out_file, n_refs, n_pairs = extract_bam(cm, clustering, args.OUTDIR, cluster_ids, clobber=args.clobber,
+                                                        threads=args.threads, bam_file=args.bam)
                 logger.info('Output BAM {} contains {:,} references and {:,} pairs'.format(out_file, n_refs, n_pairs))
 
             else:
                 raise ApplicationException('Unknown format option {}'.format(args.format))
 
     except ApplicationException as ex:
-        import sys
         logger.error(ex.message)
         sys.exit(1)
