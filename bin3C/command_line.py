@@ -7,6 +7,16 @@ from bin3C._version import version_stamp
 import argparse
 import logging
 import sys
+from pipes import quote
+
+
+def reconstruct_cmdline():
+    """
+    Reconstruct what could have been the command line, where arguments are properly escaped
+    and quoted.
+    :return: string representation of command line options
+    """
+    return ' '.join(map(quote, sys.argv))
 
 
 def or_default(v, default):
@@ -193,7 +203,7 @@ def main():
     # Add some environmental details
     logger.debug(version_stamp(False))
     logger.debug(sys.version.replace('\n', ' '))
-    logger.debug('Command line: {}'.format(' '.join(sys.argv)))
+    logger.debug('Command line: {}'.format(reconstruct_cmdline()))
 
     try:
 
@@ -305,13 +315,18 @@ def main():
             cluster_ids = [int(_id.split('_')[-1]) - 1 for _id in args.CLUSTER_ID]
             logger.info('Extracting {} clusters'.format(len(cluster_ids)))
 
+            if args.format in ['plot', 'graph']:
+                # ensure that selected clusters are not masked
+                cm.min_sig = 0
+                cm.min_len = 0
+                cm.min_extent = 0
+                cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
+                cm.prepare_seq_map(norm=True, bisto=True)
+
             if args.format == 'plot':
 
                 if args.use_extent and cm.extent_map is None:
                     logger.error('An extent map was not generated when creating the specified contact map')
-
-                cm.set_primary_acceptance_mask(update=True)
-                cm.prepare_seq_map(norm=True, bisto=True)
 
                 plot_clusters(cm, os.path.join(args.OUTDIR, 'extracted.png'), clustering,
                               max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
@@ -319,10 +334,7 @@ def main():
 
             elif args.format == 'graph':
 
-                cm.set_primary_acceptance_mask(update=True)
-                cm.prepare_seq_map(norm=True, bisto=True)
-
-                g = to_graph(cm, norm=True, bisto=True, extern_ids=True, scale=False,
+                g = to_graph(cm, norm=True, bisto=True, node_type_id='external', scale=False,
                              clustering=clustering, cl_list=cluster_ids)
 
                 nx.write_graphml(g, os.path.join(args.OUTDIR, 'extracted.graphml'))
@@ -330,7 +342,8 @@ def main():
             elif args.format == 'bam':
 
                 out_file, n_refs, n_pairs = extract_bam(cm, clustering, args.OUTDIR, cluster_ids, clobber=args.clobber,
-                                                        threads=args.threads, bam_file=args.bam)
+                                                        threads=args.threads, bam_file=args.bam,
+                                                        version=version_stamp(False), cmdline=reconstruct_cmdline())
                 logger.info('Output BAM {} contains {:,} references and {:,} pairs'.format(out_file, n_refs, n_pairs))
 
             else:
