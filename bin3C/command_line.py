@@ -123,10 +123,16 @@ def main():
                              help='Assembly software used to create contigs')
     cmd_cluster.add_argument('--no-plot', default=False, action='store_true',
                              help='Do not generate a clustered heatmap')
+    cmd_cluster.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
+                             help='File format when writing contact map plot [png]')
+    cmd_cluster.add_argument('--norm-method', default='sites', choices=['sites', 'gothic-es', 'gothic-sig'],
+                             help='Contact map normalisation method [sites]')
     cmd_cluster.add_argument('--no-fasta', default=False, action='store_true',
                              help='Do not generate cluster FASTA files')
     cmd_cluster.add_argument('--only-large', default=False, action='store_true',
                              help='Only write FASTA for clusters longer than min_extent')
+    cmd_cluster.add_argument('--coverage', metavar='PATH', default=None,
+                             help='Per-sequence depth of coverage data format: "seq_id,value"')
     # cmd_cluster.add_argument('--algo', default='infomap', choices=['infomap', 'louvain', 'mcl', 'slm', 'simap'],
     #                          help='Clustering algorithm to apply [infomap]')
     cmd_cluster.add_argument('--fasta', metavar='PATH', default=None,
@@ -146,12 +152,16 @@ def main():
     cmd_extract.add_argument('--use-extent', default=False, action='store_true',
                              help='For plots use extent map rather than sequence map if available')
     cmd_extract.add_argument('-b', '--bam', help='Alternative location of source BAM file')
+    cmd_extract.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
+                             help='File format when writing contact map plot [png]')
+    cmd_extract.add_argument('--norm-method', default='sites', choices=['sites', 'gothic-es', 'gothic-sig'],
+                             help='Contact map normalisation method [sites]')
     cmd_extract.add_argument('-f', '--format', choices=['graph', 'plot', 'bam'], default='plot',
                              help='Select output format [plot]')
     cmd_extract.add_argument('MAP', help='bin3C contact map')
     cmd_extract.add_argument('CLUSTERING', help='bin3C clustering object')
     cmd_extract.add_argument('OUTDIR', help='Output directory')
-    cmd_extract.add_argument('CLUSTER_ID', nargs='+', help='Cluster id (eg. CL_0010)')
+    cmd_extract.add_argument('CLUSTER_ID', nargs='*', help='Cluster id (eg. CL_0010)')
 
     args, extras = parser_top.parse_known_args()
 
@@ -280,9 +290,12 @@ def main():
                 cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
 
             # cluster the entire map
-            clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR, n_iter=args.n_iter)
-            # generate report per cluster
-            cluster_report(cm, clustering, assembler=args.assembler, source_fasta=args.fasta)
+            clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR,
+                                     n_iter=args.n_iter, norm_method=args.norm_method)
+            if not args.no_report:
+                # generate report per cluster
+                cluster_report(cm, clustering, assembler=args.assembler, source_fasta=args.fasta,
+                               coverage_file=args.coverage)
             # write MCL clustering file
             write_mcl(cm, os.path.join(args.OUTDIR, 'clustering.mcl'), clustering)
             # serialize full clustering object
@@ -299,7 +312,7 @@ def main():
 
             if not args.no_plot:
                 # the entire clustering
-                plot_clusters(cm, os.path.join(args.OUTDIR, 'cluster_plot.png'), clustering,
+                plot_clusters(cm, os.path.join(args.OUTDIR, 'cluster_plot.{}'.format(args.plot_format)), clustering,
                               max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
                               ordered_only=False, simple=False, permute=True)
 
@@ -312,8 +325,12 @@ def main():
             clustering = load_object(args.CLUSTERING)
 
             # Convert public string ids to internal 0-based integer ids
-            cluster_ids = [int(_id.split('_')[-1]) - 1 for _id in args.CLUSTER_ID]
-            logger.info('Extracting {} clusters'.format(len(cluster_ids)))
+            if not args.CLUSTER_ID:
+                cluster_ids = None
+                logger.info('Extracting all clusters')
+            else:
+                cluster_ids = [int(_id.split('_')[-1]) - 1 for _id in args.CLUSTER_ID]
+                logger.info('Extracting {} clusters'.format(len(cluster_ids)))
 
             if args.format in ['plot', 'graph']:
                 # ensure that selected clusters are not masked
@@ -321,21 +338,22 @@ def main():
                 cm.min_len = 0
                 cm.min_extent = 0
                 cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
-                cm.prepare_seq_map(norm=True, bisto=True)
+                cm.prepare_seq_map(norm=True, bisto=True, norm_method=args.norm_method)
 
             if args.format == 'plot':
 
                 if args.use_extent and cm.extent_map is None:
                     logger.error('An extent map was not generated when creating the specified contact map')
 
-                plot_clusters(cm, os.path.join(args.OUTDIR, 'extracted.png'), clustering,
+                plot_clusters(cm, os.path.join(args.OUTDIR, 'extracted.{}'.format(args.plot_format)), clustering,
                               max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
-                              ordered_only=False, permute=True, simple=not args.use_extent, cl_list=cluster_ids)
+                              ordered_only=False, permute=True, simple=not args.use_extent,
+                              cl_list=cluster_ids, norm_method=args.norm_method)
 
             elif args.format == 'graph':
 
                 g = to_graph(cm, norm=True, bisto=True, node_type_id='external', scale=False,
-                             clustering=clustering, cl_list=cluster_ids)
+                             clustering=clustering, cl_list=cluster_ids, norm_method=args.norm_method)
 
                 nx.write_graphml(g, os.path.join(args.OUTDIR, 'extracted.graphml'))
 

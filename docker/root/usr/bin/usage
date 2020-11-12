@@ -1,7 +1,0 @@
-#!/bin/sh
-cat <<EOF
-This is a bin3C analysis environment.
-
-Sample invocation:
-docker run -it bin3c /bin/bash
-EOF
