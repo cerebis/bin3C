@@ -45,7 +45,8 @@ def main():
         'max_image': 4000,
         'min_extent': 50000,
         'min_mapq': 60,
-        'strong': 10
+        'max_edist': 0,
+        'min_alen': 25,
     }
 
     global_parser = argparse.ArgumentParser(add_help=False)
@@ -77,9 +78,10 @@ def main():
                            help='Number of IO threads used when accessing BAM files [1]')
     cmd_mkmap.add_argument('--bin-size', metavar='NBASES', type=int,
                            help='Size of bins for windows extent maps [None]')
-    cmd_mkmap.add_argument('--tip-size', metavar='NBASES', type=int, default=None,
-                           help='The size of the region used when tracking only the ends '
-                                'of contigs [Experimental] [None]')
+    cmd_mkmap.add_argument('--keep-duplicates', default=False, action='store_true',
+                           help='Do not remove duplicate pair mappings')
+    cmd_mkmap.add_argument('--eta', default=False, action='store_true',
+                           help='Count bam alignments to provide an estimated processing time')
     cmd_mkmap.add_argument('--min-extent', metavar='NBASES', type=int,
                            help='Minimum cluster extent used in output [50000]')
     cmd_mkmap.add_argument('--min-reflen', metavar='NBASES', type=int,
@@ -90,10 +92,13 @@ def main():
                            help='Minimum pair separation [None]')
     cmd_mkmap.add_argument('--min-mapq', metavar='INT', type=int,
                            help='Minimum acceptable mapping quality [60]')
-    cmd_mkmap.add_argument('--strong', metavar='INT', type=int,
-                           help='Accepted alignments must being N matches [10]')
-    cmd_mkmap.add_argument('--eta', default=False, action='store_true',
-                           help='Count bam alignments to provide an estimated processing time')
+    cmd_mkmap.add_argument('--max-edist', metavar='INT', type=int,
+                           help='Maximum acceptable edit distance [2]')
+    cmd_mkmap.add_argument('--min-alen', metavar='INT', type=int,
+                           help='Minimum acceptable alignment length [25]')
+    cmd_mkmap.add_argument('--tip-size', metavar='NBASES', type=int, default=None,
+                           help='The size of the region used when tracking only the ends '
+                                'of contigs [Experimental] [None]')
     cmd_mkmap.add_argument('-e', '--enzyme', metavar='NEB_NAME', required=True, action='append',
                            help='Case-sensitive NEB enzyme name. Use multiple times for multiple enzymes')
     cmd_mkmap.add_argument('FASTA', help='Reference fasta sequence')
@@ -115,7 +120,7 @@ def main():
     cmd_cluster.add_argument('--min-reflen', metavar='NBASES', type=int,
                              help='Minimum acceptable reference length [1000]')
     cmd_cluster.add_argument('--min-signal', metavar='COUNTS', type=int,
-                             help='Minimum acceptable signal [5]')
+                             help='Minimum acceptable signal [2]')
     cmd_cluster.add_argument('--max-image', metavar='PIXELS', type=int, help='Maximum image size for plots [4000]')
     cmd_cluster.add_argument('--no-report', default=False, action='store_true',
                              help='Do not generate a cluster report')
@@ -151,6 +156,9 @@ def main():
     cmd_extract.add_argument('--max-image', metavar='PIXELS', type=int, help='Maximum image size for plots [4000]')
     cmd_extract.add_argument('--use-extent', default=False, action='store_true',
                              help='For plots use extent map rather than sequence map if available')
+    cmd_extract.add_argument('--show-sequences', default=False, action='store_true',
+                             help='For plots grid lines and labels mark individual '
+                                  'sequences rather than whole clusters')
     cmd_extract.add_argument('-b', '--bam', help='Alternative location of source BAM file')
     cmd_extract.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
                              help='File format when writing contact map plot [png]')
@@ -161,7 +169,7 @@ def main():
     cmd_extract.add_argument('MAP', help='bin3C contact map')
     cmd_extract.add_argument('CLUSTERING', help='bin3C clustering object')
     cmd_extract.add_argument('OUTDIR', help='Output directory')
-    cmd_extract.add_argument('CLUSTER_ID', nargs='*', help='Cluster id (eg. CL_0010)')
+    cmd_extract.add_argument('CLUSTER_ID', nargs='*', type=int, help='1-based Cluster number (eg. 1,2,..,99)')
 
     args, extras = parser_top.parse_known_args()
 
@@ -237,9 +245,11 @@ def main():
                             min_len=or_default(args.min_reflen, runtime_defaults['min_reflen']),
                             min_sig=or_default(args.min_signal, runtime_defaults['min_signal']),
                             min_extent=or_default(args.min_extent, runtime_defaults['min_extent']),
-                            strong=or_default(args.strong, runtime_defaults['strong']),
+                            max_edist=or_default(args.max_edist, runtime_defaults['max_edist']),
+                            min_alen=or_default(args.min_alen, runtime_defaults['min_alen']),
                             bin_size=args.bin_size,
                             tip_size=args.tip_size,
+                            no_duplicates=not args.keep_duplicates,
                             precount=args.eta,
                             threads=args.threads)
 
@@ -329,7 +339,7 @@ def main():
                 cluster_ids = None
                 logger.info('Extracting all clusters')
             else:
-                cluster_ids = [int(_id.split('_')[-1]) - 1 for _id in args.CLUSTER_ID]
+                cluster_ids = np.asarray(args.CLUSTER_ID, dtype=np.int) - 1
                 logger.info('Extracting {} clusters'.format(len(cluster_ids)))
 
             if args.format in ['plot', 'graph']:
@@ -348,11 +358,11 @@ def main():
                 plot_clusters(cm, os.path.join(args.OUTDIR, 'extracted.{}'.format(args.plot_format)), clustering,
                               max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
                               ordered_only=False, permute=True, simple=not args.use_extent,
-                              cl_list=cluster_ids, norm_method=args.norm_method)
+                              cl_list=cluster_ids, norm_method=args.norm_method, show_sequences=args.show_sequences)
 
             elif args.format == 'graph':
 
-                g = to_graph(cm, norm=True, bisto=True, node_type_id='external', scale=False,
+                g = to_graph(cm, norm=True, bisto=True, node_id_type='external', scale=False,
                              clustering=clustering, cl_list=cluster_ids, norm_method=args.norm_method)
 
                 nx.write_graphml(g, os.path.join(args.OUTDIR, 'extracted.graphml'))
