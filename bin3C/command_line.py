@@ -41,11 +41,11 @@ def main():
 
     runtime_defaults = {
         'min_reflen': 1000,
-        'min_signal': 5,
+        'min_signal': 2,
         'max_image': 4000,
         'min_extent': 50000,
         'min_mapq': 60,
-        'max_edist': 0,
+        'max_edist': 2,
         'min_alen': 25,
     }
 
@@ -87,14 +87,14 @@ def main():
     cmd_mkmap.add_argument('--min-reflen', metavar='NBASES', type=int,
                            help='Minimum acceptable reference length [1000]')
     cmd_mkmap.add_argument('--min-signal', metavar='COUNTS', type=int,
-                           help='Minimum acceptable signal [5]')
+                           help='Minimum acceptable signal [2]')
     cmd_mkmap.add_argument('--min-insert', metavar='NBASES', type=int,
                            help='Minimum pair separation [None]')
     cmd_mkmap.add_argument('--min-mapq', metavar='INT', type=int,
                            help='Minimum acceptable mapping quality [60]')
     cmd_mkmap.add_argument('--max-edist', metavar='INT', type=int,
                            help='Maximum acceptable edit distance [2]')
-    cmd_mkmap.add_argument('--min-alen', metavar='INT', type=int,
+    cmd_mkmap.add_argument('--min-alen', metavar='NBASES', type=int,
                            help='Minimum acceptable alignment length [25]')
     cmd_mkmap.add_argument('--tip-size', metavar='NBASES', type=int, default=None,
                            help='The size of the region used when tracking only the ends '
