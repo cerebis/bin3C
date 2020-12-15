@@ -1,6 +1,10 @@
 # bin3C
 Extract metagenome-assembled genomes (MAGs) from metagenomic data using Hi-C.
 
+## Note on latest codebase: 
+
+At present, users are encouraged checkout the developmental `extraction` or `gothic` branches. These extensions will eventually be merged into the master branch.
+
 ## Introduction
 bin3C is a tool which attempts to extract so called metagenome-assembled genones or MAGs from metagenomic shotgun sequencing experiments. The major prerequisite for achieving this is an accompanying Hi-C sequencing data-set.
 
