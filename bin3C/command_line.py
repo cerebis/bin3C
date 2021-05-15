@@ -43,7 +43,7 @@ def main():
         'min_reflen': 1000,
         'min_signal': 2,
         'max_image': 4000,
-        'min_extent': 50000,
+        'min_extent': 1000,
         'min_mapq': 60,
         'max_edist': 2,
         'min_alen': 25,
@@ -130,7 +130,8 @@ def main():
                              help='Do not generate a clustered heatmap')
     cmd_cluster.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
                              help='File format when writing contact map plot [png]')
-    cmd_cluster.add_argument('--norm-method', default='sites', choices=['sites', 'gothic-es', 'gothic-sig'],
+    cmd_cluster.add_argument('--norm-method', default='sites', choices=['sites', 'gothic-effect', 'gothic-binomial',
+                                                                        'gothic-poisson'],
                              help='Contact map normalisation method [sites]')
     cmd_cluster.add_argument('--no-fasta', default=False, action='store_true',
                              help='Do not generate cluster FASTA files')
@@ -144,6 +145,8 @@ def main():
                              help='Alternative location of source FASTA from that supplied during mkmap')
     cmd_cluster.add_argument('--n-iter', '-N', metavar="INT", default=None, type=int,
                              help='Number of iterations for clustering optimisation [10]')
+    cmd_cluster.add_argument('--exclude-from', metavar='FILE', default=None,
+                             help='File of sequence ids (one-per-line) to exclude from clustering')
     cmd_cluster.add_argument('MAP', help='bin3C contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
 
@@ -162,7 +165,8 @@ def main():
     cmd_extract.add_argument('-b', '--bam', help='Alternative location of source BAM file')
     cmd_extract.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
                              help='File format when writing contact map plot [png]')
-    cmd_extract.add_argument('--norm-method', default='sites', choices=['sites', 'gothic-es', 'gothic-sig'],
+    cmd_extract.add_argument('--norm-method', default='sites', choices=['sites', 'gothic-effect', 'gothic-binomial',
+                                                                        'gothic-poisson'],
                              help='Contact map normalisation method [sites]')
     cmd_extract.add_argument('-f', '--format', choices=['graph', 'plot', 'bam'], default='plot',
                              help='Select output format [plot]')
@@ -299,9 +303,18 @@ def main():
             if remask:
                 cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
 
+            exclude_names = []
+            if args.exclude_from:
+                logger.info('Reading excluded ids from {}'.format(args.exclude_from))
+                for _nm in open(args.exclude_from, 'r'):
+                    _nm = _nm.strip()
+                    if not _nm or _nm.startswith('#'):
+                        continue
+                    exclude_names.append(_nm)
+
             # cluster the entire map
             clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR,
-                                     n_iter=args.n_iter, norm_method=args.norm_method)
+                                     n_iter=args.n_iter, norm_method=args.norm_method, exclude_names=exclude_names)
             if not args.no_report:
                 # generate report per cluster
                 cluster_report(cm, clustering, assembler=args.assembler, source_fasta=args.fasta,
