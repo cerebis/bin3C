@@ -178,7 +178,7 @@ def main():
     args, extras = parser_top.parse_known_args()
 
     if args.version:
-        print version_stamp()
+        print(version_stamp())
         sys.exit(0)
 
     if len(extras) == 0:
@@ -190,7 +190,7 @@ def main():
     try:
         make_dir(args.OUTDIR, args.clobber)
     except IOError as e:
-        print 'Error: {}'.format(e.message)
+        print('Error: {}'.format(e.message))
         sys.exit(1)
 
     logging.captureWarnings(True)
@@ -232,9 +232,10 @@ def main():
         if args.command == 'mkmap':
 
             if args.tip_size is not None:
-                logger.warn('[Experimental] Specifying tip-size enables independent tracking of the ends of contigs.')
+                logger.warning('[Experimental] Specifying tip-size enables '
+                               'independent tracking of the ends of contigs.')
                 if args.tip_size < 5000:
-                    logger.warn('[Experimental] It is recommended to use tip sizes no smaller than 5kbp')
+                    logger.warning('[Experimental] It is recommended to use tip sizes no smaller than 5kbp')
                 if args.tip_size > args.min_reflen:
                     msg = 'min-reflen cannot be smaller than the tip-size'
                     logger.error('[Experimental] {}'.format(msg))
@@ -391,5 +392,5 @@ def main():
                 raise ApplicationException('Unknown format option {}'.format(args.format))
 
     except ApplicationException as ex:
-        logger.error(ex.message)
+        logger.error(ex)
         sys.exit(1)
