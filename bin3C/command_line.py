@@ -19,14 +19,6 @@ def reconstruct_cmdline():
     return ' '.join(map(quote, sys.argv))
 
 
-def or_default(v, default):
-    if v is not None:
-        assert isinstance(v, type(default)), \
-            'supplied value [{}] is not of the correct type [{}]'.format(v, type(default))
-        return v
-    return default
-
-
 def required_length(n_min):
     class RequiredLength(argparse.Action):
         def __call__(self, parser, args, values, option_string=None):
@@ -39,124 +31,139 @@ def required_length(n_min):
 
 def main():
 
-    runtime_defaults = {
+    _defaults = {
         'min_reflen': 1000,
         'min_signal': 2,
         'max_image': 4000,
-        'min_extent': 1000,
+        'min_extent': 5000,
+        'min_insert': None,
         'min_mapq': 60,
-        'max_edist': 2,
+        'max_edist': 4,
         'min_alen': 25,
+        'threads': 1,
+        'bin_size': None,
+        'tip_size': None,
+        'n-iter': 10,
+        'norm-method': 'sites',
     }
 
+    # options shared by all commands
     global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument('-d', '--debug', default=False, action='store_true',
+                               help='Fall into debug mode on exception')
     global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     global_parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
-    global_parser.add_argument('--log', help='Log file path [OUTDIR/bin3C.log]')
+    global_parser.add_argument('--log', help='Log file path (default: OUTDIR/bin3C.log)')
 
-    parser_top = argparse.ArgumentParser(description='bin3C: a Hi-C based metagenome deconvolution tool',
-                                         add_help=False)
-    parser_top.add_argument('-V', '--version', default=False, action='store_true', help='Version')
+    # options shared by primary analysis commands
+    analysis_parser = argparse.ArgumentParser(add_help=False)
+    analysis_parser.add_argument('--min-extent', metavar='NBASES', type=int, default=_defaults['min_extent'],
+                                 help='Minimum cluster extent used in output (default: %(default)s)')
+    analysis_parser.add_argument('--min-reflen', metavar='NBASES', type=int, default=_defaults['min_reflen'],
+                                 help='Minimum acceptable reference length (default: %(default)s)')
+    analysis_parser.add_argument('--min-signal', metavar='COUNTS', type=int, default=_defaults['min_signal'],
+                                 help='Minimum acceptable signal (default: %(default)s)')
 
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(title='commands', dest='command', description='Valid commands',
-                                       help='choose an analysis stage for further options')
-    subparsers.required = False
-    cmd_mkmap = subparsers.add_parser('mkmap', parents=[global_parser],
-                                      description='Create a new contact map from assembly sequences and Hi-C bam file.')
-    cmd_combine = subparsers.add_parser('combine', parents=[global_parser],
-                                        description='Additively combine contact maps derived from the same assembly.')
-    cmd_cluster = subparsers.add_parser('cluster', parents=[global_parser],
-                                        description='Cluster an existing contact map into genome bins.')
-    cmd_extract = subparsers.add_parser('extract', parents=[global_parser],
-                                        description='Extract a representation of single cluster')
+    parser = argparse.ArgumentParser(description='bin3C: a tool for Hi-C based metagenome-assembled genome binning',
+                                     add_help=True)
+    parser.add_argument('-V', '--version', default=False, action='store_true', help='Version')
+
+    # sub-commands fall beneath this parser
+    command_parsers = parser.add_subparsers(title='Valid subcommands', dest='command',
+                                            help='Specify a subcommand for further options')
+    command_parsers.required = False
 
     """
     make and save the contact map object
     """
-    cmd_mkmap.add_argument('--threads', metavar='INT', type=int, default=1,
-                           help='Number of IO threads used when accessing BAM files [1]')
-    cmd_mkmap.add_argument('--bin-size', metavar='NBASES', type=int,
-                           help='Size of bins for windows extent maps [None]')
+    cmd_mkmap = command_parsers.add_parser('mkmap', parents=[global_parser, analysis_parser],
+                                           description='Create a contact map from assembly '
+                                                       'sequences and Hi-C bam file.')
+    cmd_mkmap.add_argument('--threads', metavar='INT', type=int, default=_defaults['threads'],
+                           help='Number of IO threads used when accessing BAM files (default: %(default)s)')
+    cmd_mkmap.add_argument('--bin-size', metavar='NBASES', type=int, default=None,
+                           help='Size of bins for windows extent maps (default: %(default)s)')
     cmd_mkmap.add_argument('--keep-duplicates', default=False, action='store_true',
                            help='Do not remove duplicate pair mappings')
     cmd_mkmap.add_argument('--eta', default=False, action='store_true',
                            help='Count bam alignments to provide an estimated processing time')
-    cmd_mkmap.add_argument('--min-extent', metavar='NBASES', type=int,
-                           help='Minimum cluster extent used in output [50000]')
-    cmd_mkmap.add_argument('--min-reflen', metavar='NBASES', type=int,
-                           help='Minimum acceptable reference length [1000]')
-    cmd_mkmap.add_argument('--min-signal', metavar='COUNTS', type=int,
-                           help='Minimum acceptable signal [2]')
-    cmd_mkmap.add_argument('--min-insert', metavar='NBASES', type=int,
-                           help='Minimum pair separation [None]')
-    cmd_mkmap.add_argument('--min-mapq', metavar='INT', type=int,
-                           help='Minimum acceptable mapping quality [60]')
-    cmd_mkmap.add_argument('--max-edist', metavar='INT', type=int,
-                           help='Maximum acceptable edit distance [2]')
-    cmd_mkmap.add_argument('--min-alen', metavar='NBASES', type=int,
-                           help='Minimum acceptable alignment length [25]')
-    cmd_mkmap.add_argument('--tip-size', metavar='NBASES', type=int, default=None,
+    cmd_mkmap.add_argument('--min-insert', metavar='NBASES', type=int, default=_defaults['min_insert'],
+                           help='Minimum pair separation (default: %(default)s)')
+    cmd_mkmap.add_argument('--min-mapq', metavar='INT', type=int, default=_defaults['min_mapq'],
+                           help='Minimum acceptable mapping quality (default: %(default)s)')
+    cmd_mkmap.add_argument('--max-edist', metavar='INT', type=int, default=_defaults['max_edist'],
+                           help='Maximum acceptable edit distance (default: %(default)s)')
+    cmd_mkmap.add_argument('--min-alen', metavar='NBASES', type=int, default=_defaults['min_alen'],
+                           help='Minimum acceptable alignment length (default: %(default)s)')
+    cmd_mkmap.add_argument('--tip-size', metavar='NBASES', type=int, default=_defaults['tip_size'],
                            help='The size of the region used when tracking only the ends '
-                                'of contigs [Experimental] [None]')
-    cmd_mkmap.add_argument('-e', '--enzyme', metavar='NEB_NAME', required=True, action='append',
-                           help='Case-sensitive NEB enzyme name. Use multiple times for multiple enzymes')
+                                'of contigs [Experimental] (default: %(default)s)')
+    digestion_group = cmd_mkmap.add_mutually_exclusive_group(required=True)
+    digestion_group.add_argument('-k', '--library-kit', choices=['phase', 'arima'], default=None, nargs='?',
+                                 help='Define enzymes by commercial library kit')
+    digestion_group.add_argument('-e', '--enzyme', metavar='NEB_NAME', action='append',
+                                 help='Case-sensitive NEB enzyme name. Use multiple times for multiple enzymes')
     cmd_mkmap.add_argument('FASTA', help='Reference fasta sequence')
     cmd_mkmap.add_argument('BAM', help='Input bam file in query order')
     cmd_mkmap.add_argument('OUTDIR', help='Output directory')
 
     """
-    combine contact maps
-    """
-    cmd_combine.add_argument('OUTDIR', help='Output directory')
-    cmd_combine.add_argument('MAP', nargs='+', help='Contact maps to combine', action=required_length(2))
-
-    """
     cluster the map and save results
     """
-    cmd_cluster.add_argument('-s', '--seed', metavar='INT', default=None, help='Random seed')
-    cmd_cluster.add_argument('--min-extent', metavar='NBASES', type=int,
-                             help='Minimum cluster extent used in output [50000]')
-    cmd_cluster.add_argument('--min-reflen', metavar='NBASES', type=int,
-                             help='Minimum acceptable reference length [1000]')
-    cmd_cluster.add_argument('--min-signal', metavar='COUNTS', type=int,
-                             help='Minimum acceptable signal [2]')
-    cmd_cluster.add_argument('--max-image', metavar='PIXELS', type=int, help='Maximum image size for plots [4000]')
+    cmd_cluster = command_parsers.add_parser('cluster',
+                                             parents=[global_parser, analysis_parser],
+                                             description='Cluster an existing contact map into genome bins.')
+    cmd_cluster.add_argument('-s', '--seed', metavar='INT', default=None, help='Random seed (default: %(default)s)')
+    cmd_cluster.add_argument('--max-image', metavar='PIXELS', type=int, default=_defaults['max_image'],
+                             help='Maximum image size for plots (default: %(default)s)')
     cmd_cluster.add_argument('--no-report', default=False, action='store_true',
                              help='Do not generate a cluster report')
     cmd_cluster.add_argument('--assembler', choices=['generic', 'spades', 'megahit'], default='generic',
-                             help='Assembly software used to create contigs')
+                             help='Assembly software used to create contigs (default: %(default)s)')
     cmd_cluster.add_argument('--no-plot', default=False, action='store_true',
                              help='Do not generate a clustered heatmap')
     cmd_cluster.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
-                             help='File format when writing contact map plot [png]')
-    cmd_cluster.add_argument('--norm-method', default='sites', choices=['sites', 'gothic-effect', 'gothic-binomial',
-                                                                        'gothic-poisson'],
-                             help='Contact map normalisation method [sites]')
+                             help='File format when writing contact map plot (default: %(default)s)')
+    cmd_cluster.add_argument('--norm-method', default=_defaults['norm-method'],
+                             choices=['sites', 'gothic-effect', 'gothic-binomial', 'gothic-poisson'],
+                             help='Contact map normalisation method (default: %(default)s)')
     cmd_cluster.add_argument('--no-fasta', default=False, action='store_true',
                              help='Do not generate cluster FASTA files')
     cmd_cluster.add_argument('--only-large', default=False, action='store_true',
                              help='Only write FASTA for clusters longer than min_extent')
     cmd_cluster.add_argument('--coverage', metavar='PATH', default=None,
-                             help='Per-sequence depth of coverage data format: "seq_id,value"')
+                             help='Per-sequence depth of coverage data format: "seq_id,value" (default: %(default)s)')
     # cmd_cluster.add_argument('--algo', default='infomap', choices=['infomap', 'louvain', 'mcl', 'slm', 'simap'],
     #                          help='Clustering algorithm to apply [infomap]')
     cmd_cluster.add_argument('--fasta', metavar='PATH', default=None,
                              help='Alternative location of source FASTA from that supplied during mkmap')
-    cmd_cluster.add_argument('--n-iter', '-N', metavar="INT", default=None, type=int,
-                             help='Number of iterations for clustering optimisation [10]')
+    cmd_cluster.add_argument('--n-iter', '-N', metavar="INT", type=int, default=_defaults['n-iter'],
+                             help='Number of iterations for clustering optimisation (default: %(default)s)')
     cmd_cluster.add_argument('--exclude-from', metavar='FILE', default=None,
-                             help='File of sequence ids (one-per-line) to exclude from clustering')
+                             help='File of sequence ids (one-per-line) to '
+                                  'exclude from clustering (default: %(default)s)')
     cmd_cluster.add_argument('MAP', help='bin3C contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
 
     """
+    combine contact maps
+    """
+    cmd_combine = command_parsers.add_parser('combine', parents=[global_parser],
+                                             description='Additively combine contact maps '
+                                                         'derived from the same assembly.')
+    cmd_combine.add_argument('OUTDIR', help='Output directory')
+    cmd_combine.add_argument('MAP', nargs='+', help='Contact maps to combine', action=required_length(2))
+
+    """
     extract a single cluster
     """
-
-    cmd_extract.add_argument('--threads', metavar='INT', type=int, default=1,
-                             help='Number of IO threads for accessing BAM file [1]')
-    cmd_extract.add_argument('--max-image', metavar='PIXELS', type=int, help='Maximum image size for plots [4000]')
+    cmd_extract = command_parsers.add_parser('extract',
+                                             parents=[global_parser],
+                                             description='Extract a representation of single cluster')
+    cmd_extract.add_argument('--threads', metavar='INT', type=int, default=_defaults['threads'],
+                             help='Number of IO threads for accessing BAM file (default: %(default)s)')
+    cmd_extract.add_argument('--max-image', metavar='PIXELS', type=int, default=_defaults['max_image'],
+                             help='Maximum image size for plots (default: %(default)s)')
     cmd_extract.add_argument('--use-extent', default=False, action='store_true',
                              help='For plots use extent map rather than sequence map if available')
     cmd_extract.add_argument('--show-sequences', default=False, action='store_true',
@@ -164,33 +171,31 @@ def main():
                                   'sequences rather than whole clusters')
     cmd_extract.add_argument('-b', '--bam', help='Alternative location of source BAM file')
     cmd_extract.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
-                             help='File format when writing contact map plot [png]')
-    cmd_extract.add_argument('--norm-method', default='sites', choices=['sites', 'gothic-effect', 'gothic-binomial',
-                                                                        'gothic-poisson'],
-                             help='Contact map normalisation method [sites]')
+                             help='File format when writing contact map plot (default: %(default)s)')
+    cmd_extract.add_argument('--norm-method', default=_defaults['norm-method'],
+                             choices=['sites', 'gothic-effect', 'gothic-binomial', 'gothic-poisson'],
+                             help='Contact map normalisation method (default: %(default)s)')
     cmd_extract.add_argument('-f', '--format', choices=['graph', 'plot', 'bam'], default='plot',
-                             help='Select output format [plot]')
+                             help='Select output format (default: %(default)s)')
     cmd_extract.add_argument('MAP', help='bin3C contact map')
     cmd_extract.add_argument('CLUSTERING', help='bin3C clustering object')
     cmd_extract.add_argument('OUTDIR', help='Output directory')
     cmd_extract.add_argument('CLUSTER_ID', nargs='*', type=int, help='1-based Cluster number (eg. 1,2,..,99)')
 
-    args, extras = parser_top.parse_known_args()
+    args = parser.parse_args()
 
     if args.version:
         print(version_stamp())
         sys.exit(0)
 
-    if len(extras) == 0:
+    if args.command is None:
         parser.print_usage()
         sys.exit(0)
 
-    parser.parse_args(extras, namespace=args)
-
     try:
         make_dir(args.OUTDIR, args.clobber)
-    except IOError as e:
-        print('Error: {}'.format(e.message))
+    except IOError as ex:
+        print('Error: {}'.format(ex))
         sys.exit(1)
 
     logging.captureWarnings(True)
@@ -241,17 +246,25 @@ def main():
                     logger.error('[Experimental] {}'.format(msg))
                     raise ApplicationException(msg)
 
+            # check if the user has employed the library kit option to declare enzymes
+            if args.command in {'kmer', 'bam'} and args.library_kit is not None:
+                # commercial kit definitions
+                kit_choices = {'phase': ['Sau3AI', 'MluCI'],
+                               'arima': ['DpnII', 'HinfI']}
+                args.enzyme = kit_choices[args.library_kit]
+                logger.info('Library kit {} declares enzymes {}'.format(args.library_kit, args.enzyme))
+
             # Create a contact map for analysis
             cm = ContactMap(args.BAM,
                             args.enzyme,
                             args.FASTA,
                             args.min_insert,
-                            or_default(args.min_mapq, runtime_defaults['min_mapq']),
-                            min_len=or_default(args.min_reflen, runtime_defaults['min_reflen']),
-                            min_sig=or_default(args.min_signal, runtime_defaults['min_signal']),
-                            min_extent=or_default(args.min_extent, runtime_defaults['min_extent']),
-                            max_edist=or_default(args.max_edist, runtime_defaults['max_edist']),
-                            min_alen=or_default(args.min_alen, runtime_defaults['min_alen']),
+                            min_mapq=args.min_mapq,
+                            min_len=args.min_reflen,
+                            min_sig=args.min_signal,
+                            min_extent=args.min_extent,
+                            max_edist=args.max_edist,
+                            min_alen=args.min_alen,
                             bin_size=args.bin_size,
                             tip_size=args.tip_size,
                             no_duplicates=not args.keep_duplicates,
@@ -314,12 +327,21 @@ def main():
                     exclude_names.append(_nm)
 
             # cluster the entire map
-            clustering = cluster_map(cm, method='infomap', seed=args.seed, work_dir=args.OUTDIR,
-                                     n_iter=args.n_iter, norm_method=args.norm_method, exclude_names=exclude_names)
+            clustering = cluster_map(cm,
+                                     method='infomap',
+                                     seed=args.seed,
+                                     work_dir=args.OUTDIR,
+                                     n_iter=args.n_iter,
+                                     norm_method=args.norm_method,
+                                     exclude_names=exclude_names)
             if not args.no_report:
                 # generate report per cluster
-                cluster_report(cm, clustering, assembler=args.assembler, source_fasta=args.fasta,
+                cluster_report(cm,
+                               clustering,
+                               assembler=args.assembler,
+                               source_fasta=args.fasta,
                                coverage_file=args.coverage)
+
             # write MCL clustering file
             write_mcl(cm, os.path.join(args.OUTDIR, 'clustering.mcl'), clustering)
             # serialize full clustering object
@@ -331,14 +353,22 @@ def main():
 
             if not args.no_fasta:
                 # write per-cluster fasta files, also separate ordered fasta if an ordering exists
-                write_fasta(cm, args.OUTDIR, clustering, source_fasta=args.fasta, clobber=True,
+                write_fasta(cm,
+                            args.OUTDIR,
+                            clustering,
+                            source_fasta=args.fasta,
+                            clobber=True,
                             only_large=args.only_large)
 
             if not args.no_plot:
                 # the entire clustering
-                plot_clusters(cm, os.path.join(args.OUTDIR, 'cluster_plot.{}'.format(args.plot_format)), clustering,
-                              max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
-                              ordered_only=False, simple=False, permute=True)
+                plot_clusters(cm,
+                              os.path.join(args.OUTDIR, 'cluster_plot.{}'.format(args.plot_format)),
+                              clustering,
+                              max_image_size=args.max_image,
+                              ordered_only=False,
+                              simple=False,
+                              permute=True)
 
         elif args.command == 'extract':
 
@@ -369,23 +399,42 @@ def main():
                 if args.use_extent and cm.extent_map is None:
                     logger.error('An extent map was not generated when creating the specified contact map')
 
-                plot_clusters(cm, os.path.join(args.OUTDIR, 'extracted.{}'.format(args.plot_format)), clustering,
-                              max_image_size=or_default(args.max_image, runtime_defaults['max_image']),
-                              ordered_only=False, permute=True, simple=not args.use_extent,
-                              cl_list=cluster_ids, norm_method=args.norm_method, show_sequences=args.show_sequences)
+                plot_clusters(cm,
+                              os.path.join(args.OUTDIR, 'extracted.{}'.format(args.plot_format)),
+                              clustering,
+                              max_image_size=args.max_image,
+                              ordered_only=False,
+                              permute=True,
+                              simple=not args.use_extent,
+                              cl_list=cluster_ids,
+                              norm_method=args.norm_method,
+                              show_sequences=args.show_sequences)
 
             elif args.format == 'graph':
 
-                g = to_graph(cm, norm=True, bisto=True, node_id_type='external', scale=False,
-                             clustering=clustering, cl_list=cluster_ids, norm_method=args.norm_method)
+                g = to_graph(cm,
+                             norm=True,
+                             bisto=True,
+                             node_id_type='external',
+                             scale=False,
+                             clustering=clustering,
+                             cl_list=cluster_ids,
+                             norm_method=args.norm_method)
 
                 nx.write_graphml(g, os.path.join(args.OUTDIR, 'extracted.graphml'))
 
             elif args.format == 'bam':
 
-                out_file, n_refs, n_pairs = extract_bam(cm, clustering, args.OUTDIR, cluster_ids, clobber=args.clobber,
-                                                        threads=args.threads, bam_file=args.bam,
-                                                        version=version_stamp(False), cmdline=reconstruct_cmdline())
+                out_file, n_refs, n_pairs = extract_bam(cm,
+                                                        clustering,
+                                                        args.OUTDIR,
+                                                        cluster_ids,
+                                                        clobber=args.clobber,
+                                                        threads=args.threads,
+                                                        bam_file=args.bam,
+                                                        version=version_stamp(False),
+                                                        cmdline=reconstruct_cmdline())
+
                 logger.info('Output BAM {} contains {:,} references and {:,} pairs'.format(out_file, n_refs, n_pairs))
 
             else:
