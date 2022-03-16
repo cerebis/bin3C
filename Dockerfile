@@ -27,14 +27,17 @@ RUN apt-get update && \
         zlib1g-dev && \
     apt-get clean
 
+ARG home=/app
+ENV HOME=$home
+WORKDIR $HOME
+RUN pwd
+
 RUN conda install --yes -c conda-forge -c bioconda "python==3.7" bwa samtools && \
     conda clean -afy
 
 RUN pip3 install --no-cache-dir cython numpy && \
     pip3 install --no-cache-dir git+https://github.com/cerebis/bin3C@py3
 
-RUN mkdir -p /app
-WORKDIR /app
 ENTRYPOINT ["bin3C"]
 CMD ["--help"]
 
