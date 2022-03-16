@@ -70,7 +70,8 @@ RUN wget -O bbmap.tar.gz "https://downloads.sourceforge.net/project/bbmap/BBMap_
 FROM fedora:29
 
 # restore minimum runtime dependencies
-RUN dnf update -y && \
+RUN dnf clean all && \
+    dnf update -y --releasever=29 && \
     dnf install -y \
         bzip2 \
         freetype \
@@ -90,12 +91,14 @@ COPY --from=builder /usr/local/samtools-1.9/samtools /usr/local/bin/
 COPY --from=builder /usr/local/htslib-1.9/bgzip /usr/local/bin/
 COPY --from=builder /opt/bwa-0.7.17/bwa /usr/local/bin/
 COPY --from=builder /opt/bbmap /opt/bbmap/
-RUN ln -s /opt/bbmap/*sh /usr/local/bin/
 COPY --from=builder /opt/SPAdes-3.13.0-Linux /opt/SPAdes-3.13.0-Linux/
-RUN ln -s /opt/SPAdes-3.13.0-Linux/bin/* /usr/local/bin/
+
+RUN ln -s /opt/bbmap/*sh /usr/local/bin/ && \
+    ln -s /opt/SPAdes-3.13.0-Linux/bin/* /usr/local/bin/ && \
+    chmod 755 /usr/lib/python2.7/site-packages
 
 # further setup
-COPY ./root/usr /usr/
+COPY docker/root/usr /usr/
 ENV HOME=/opt/app-root/ \
     PATH=/opt/app-root/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
