@@ -28,7 +28,7 @@ setuptools.setup(
     url='https://github.com/cerebis/bin3C',
     license='GNU Affero General Public License v3',
 
-    install_requires=['proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@py3#egg=proxigenomics_toolkit'],
+    install_requires=['proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@long-dev#egg=proxigenomics_toolkit'],
 
     classifiers=[
         'Programming Language :: Python :: 3.9',

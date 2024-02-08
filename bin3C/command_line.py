@@ -32,19 +32,20 @@ def required_length(n_min):
 def main():
 
     _defaults = {
-        'min_reflen': 1000,
-        'min_signal': 2,
+        'min_reflen': 2500,
+        'min_signal': 4,
         'max_image': 4000,
-        'min_extent': 5000,
+        'min_extent': 1000,
         'min_insert': None,
         'min_mapq': 60,
         'max_edist': 4,
-        'min_alen': 25,
+        'min_alen': 50,
         'threads': 1,
-        'bin_size': None,
+        'bin_size': 5000,
         'tip_size': None,
         'n-iter': 10,
-        'norm-method': 'sites',
+        'norm-method': 'gothic',
+        'plot-contrast': 0.001
     }
 
     # options shared by all commands
@@ -118,14 +119,14 @@ def main():
                              help='Maximum image size for plots (default: %(default)s)')
     cmd_cluster.add_argument('--no-report', default=False, action='store_true',
                              help='Do not generate a cluster report')
-    cmd_cluster.add_argument('--assembler', choices=['generic', 'spades', 'megahit'], default='generic',
+    cmd_cluster.add_argument('--assembler', choices=['generic', 'spades', 'megahit', 'flye'], default='generic',
                              help='Assembly software used to create contigs (default: %(default)s)')
     cmd_cluster.add_argument('--no-plot', default=False, action='store_true',
                              help='Do not generate a clustered heatmap')
     cmd_cluster.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
                              help='File format when writing contact map plot (default: %(default)s)')
     cmd_cluster.add_argument('--norm-method', default=_defaults['norm-method'],
-                             choices=['sites', 'gothic-effect', 'gothic-binomial', 'gothic-poisson'],
+                             choices=['sites', 'length', 'gothic'],
                              help='Contact map normalisation method (default: %(default)s)')
     cmd_cluster.add_argument('--no-fasta', default=False, action='store_true',
                              help='Do not generate cluster FASTA files')
@@ -137,11 +138,30 @@ def main():
     #                          help='Clustering algorithm to apply [infomap]')
     cmd_cluster.add_argument('--fasta', metavar='PATH', default=None,
                              help='Alternative location of source FASTA from that supplied during mkmap')
+    cmd_cluster.add_argument('--gfa', metavar='PATH', default=None,
+                             help='Location of assembly GFA file for multilayer clustering')
     cmd_cluster.add_argument('--n-iter', '-N', metavar="INT", type=int, default=_defaults['n-iter'],
                              help='Number of iterations for clustering optimisation (default: %(default)s)')
     cmd_cluster.add_argument('--exclude-from', metavar='FILE', default=None,
                              help='File of sequence ids (one-per-line) to '
                                   'exclude from clustering (default: %(default)s)')
+    cmd_cluster.add_argument('--use-extent', default=False, action='store_true',
+                             help='Use the extent map to cluster sequences')
+    cmd_cluster.add_argument('--from-extent', default=False, action='store_true',
+                             help='Derive a normalised sequence map from the extent map')
+    cmd_cluster.add_argument('--use-entropy', default=False, action='store_true',
+                             help='Enable Infomap entropy correction')
+    cmd_cluster.add_argument('--fdr-alpha', metavar="FLOAT", type=float, default=0.05,
+                             help='Alpha used in GOTHiC normalisation and rejection (default: %(default)s)')
+    cmd_cluster.add_argument('--plot-contrast', metavar="FLOAT", type=float, default=0.001,
+                             help='Contrast factor for plotting smaller->brighter (default: %(default)s)')
+    cmd_cluster.add_argument('--vary-markov', default=False, action='store_true',
+                             help='Enable Infomap variable markov time')
+    cmd_cluster.add_argument('--markov-scale', metavar="FLOAT", type=float, default=None,
+                             help='Scaling factor for clustering granularity (float > 0) (default: 1)')
+    cmd_cluster.add_argument('--regularize', metavar="FLOAT", type=float, default=None,
+                             help='Enable a regularized prior with strength (float > 0) (default: 1)')
+
     cmd_cluster.add_argument('MAP', help='bin3C contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
 
@@ -173,10 +193,14 @@ def main():
     cmd_extract.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
                              help='File format when writing contact map plot (default: %(default)s)')
     cmd_extract.add_argument('--norm-method', default=_defaults['norm-method'],
-                             choices=['sites', 'gothic-effect', 'gothic-binomial', 'gothic-poisson'],
+                             choices=['sites', 'length', 'gothic'],
                              help='Contact map normalisation method (default: %(default)s)')
     cmd_extract.add_argument('-f', '--format', choices=['graph', 'plot', 'bam'], default='plot',
                              help='Select output format (default: %(default)s)')
+    cmd_extract.add_argument('--plot-contrast', metavar="FLOAT", type=float, default=0.001,
+                             help='Contrast factor for plotting smaller->brighter (default: %(default)s)')
+    cmd_extract.add_argument('--min-extent', metavar='NBASES', type=int, default=_defaults['min_extent'],
+                                 help='Minimum cluster extent used in output (default: %(default)s)')
     cmd_extract.add_argument('MAP', help='bin3C contact map')
     cmd_extract.add_argument('CLUSTERING', help='bin3C clustering object')
     cmd_extract.add_argument('OUTDIR', help='Output directory')
@@ -317,8 +341,9 @@ def main():
             if remask:
                 cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
 
-            exclude_names = []
+            exclude_names = None
             if args.exclude_from:
+                exclude_names = []
                 logger.info('Reading excluded ids from {}'.format(args.exclude_from))
                 for _nm in open(args.exclude_from, 'r'):
                     _nm = _nm.strip()
@@ -328,12 +353,19 @@ def main():
 
             # cluster the entire map
             clustering = cluster_map(cm,
-                                     method='infomap',
-                                     seed=args.seed,
-                                     work_dir=args.OUTDIR,
-                                     n_iter=args.n_iter,
-                                     norm_method=args.norm_method,
-                                     exclude_names=exclude_names)
+                                      seed=args.seed,
+                                      work_dir=args.OUTDIR,
+                                      n_iter=args.n_iter,
+                                      norm_method=args.norm_method,
+                                      exclude_names=exclude_names,
+                                      from_extent=args.from_extent,
+                                      fdr_alpha=args.fdr_alpha,
+                                      use_entropy=args.use_entropy,
+                                      gfa_file=args.gfa,
+                                      markov_scale=args.markov_scale,
+                                      regularize=args.regularize,
+                                      vary_markov=args.vary_markov)
+
             if not args.no_report:
                 # generate report per cluster
                 cluster_report(cm,
@@ -368,7 +400,8 @@ def main():
                               max_image_size=args.max_image,
                               ordered_only=False,
                               simple=False,
-                              permute=True)
+                              permute=True,
+                              alpha=args.plot_contrast)
 
         elif args.command == 'extract':
 
@@ -403,12 +436,14 @@ def main():
                               os.path.join(args.OUTDIR, 'extracted.{}'.format(args.plot_format)),
                               clustering,
                               max_image_size=args.max_image,
+                              min_extent=args.min_extent,
                               ordered_only=False,
                               permute=True,
                               simple=not args.use_extent,
                               cl_list=cluster_ids,
                               norm_method=args.norm_method,
-                              show_sequences=args.show_sequences)
+                              show_sequences=args.show_sequences,
+                              alpha=args.plot_contrast)
 
             elif args.format == 'graph':
 
