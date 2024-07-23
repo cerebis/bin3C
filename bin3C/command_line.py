@@ -33,19 +33,22 @@ def main():
 
     _defaults = {
         'min_reflen': 2500,
-        'min_signal': 4,
+        'min_signal': 5,
         'max_image': 4000,
-        'min_extent': 1000,
-        'min_insert': None,
+        'min_extent': 0,
+        'min_insert': 750,
         'min_mapq': 60,
         'max_edist': 4,
         'min_alen': 50,
         'threads': 1,
         'bin_size': 5000,
         'tip_size': None,
-        'n-iter': 10,
+        'n-iter': 50,
         'norm-method': 'gothic',
-        'plot-contrast': 0.001
+        'plot-contrast': 1e-4,
+        'fdr-alpha': 1e-2,
+        'markov-scale': 0.95,
+        'regularize': None
     }
 
     # options shared by all commands
@@ -151,16 +154,16 @@ def main():
                              help='Derive a normalised sequence map from the extent map')
     cmd_cluster.add_argument('--use-entropy', default=False, action='store_true',
                              help='Enable Infomap entropy correction')
-    cmd_cluster.add_argument('--fdr-alpha', metavar="FLOAT", type=float, default=0.05,
+    cmd_cluster.add_argument('--fdr-alpha', metavar="FLOAT", type=float, default=_defaults['fdr-alpha'],
                              help='Alpha used in GOTHiC normalisation and rejection (default: %(default)s)')
-    cmd_cluster.add_argument('--plot-contrast', metavar="FLOAT", type=float, default=0.001,
+    cmd_cluster.add_argument('--plot-contrast', metavar="FLOAT", type=float, default=_defaults['plot-contrast'],
                              help='Contrast factor for plotting smaller->brighter (default: %(default)s)')
     cmd_cluster.add_argument('--vary-markov', default=False, action='store_true',
                              help='Enable Infomap variable markov time')
-    cmd_cluster.add_argument('--markov-scale', metavar="FLOAT", type=float, default=None,
+    cmd_cluster.add_argument('--markov-scale', metavar="FLOAT", type=float, default=_defaults['markov-scale'],
                              help='Scaling factor for clustering granularity (float > 0) (default: 1)')
-    cmd_cluster.add_argument('--regularize', metavar="FLOAT", type=float, default=None,
-                             help='Enable a regularized prior with strength (float > 0) (default: 1)')
+    cmd_cluster.add_argument('--regularize', metavar="FLOAT", type=float, default=_defaults['regularize'],
+                             help='Enable a regularized prior with strength (float > 0) (default: disabled)')
 
     cmd_cluster.add_argument('MAP', help='bin3C contact map')
     cmd_cluster.add_argument('OUTDIR', help='Output directory')
@@ -416,7 +419,7 @@ def main():
                 cluster_ids = None
                 logger.info('Extracting all clusters')
             else:
-                cluster_ids = np.asarray(args.CLUSTER_ID, dtype=np.int) - 1
+                cluster_ids = np.asarray(args.CLUSTER_ID, dtype=np.int64) - 1
                 logger.info('Extracting {} clusters'.format(len(cluster_ids)))
 
             if args.format in ['plot', 'graph']:

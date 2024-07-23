@@ -31,7 +31,7 @@ setuptools.setup(
     install_requires=['proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@long_dev#egg=proxigenomics_toolkit'],
 
     classifiers=[
-        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.11',
         'License :: OSI Approved :: GNU Affero General Public License v3',
         'Operating System :: POSIX :: Linux',
         'Intended Audience :: Science/Research',
