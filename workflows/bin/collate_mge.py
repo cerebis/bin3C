@@ -2,12 +2,10 @@
 import pandas as pd
 import numpy as np
 import Bio.SeqIO as SeqIO
-import Bio.SeqUtils as SeqUtils
 from pyvenn import venn
 import os
 import matplotlib.pyplot as plt
 import errno
-import tqdm
 
 from pandas.errors import EmptyDataError
 

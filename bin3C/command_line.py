@@ -23,10 +23,54 @@ def required_length(n_min):
     class RequiredLength(argparse.Action):
         def __call__(self, parser, args, values, option_string=None):
             if len(values) < n_min:
-                msg = 'argument "{f}" requires at least {nmin} arguments'.format(f=self.dest, nmin=n_min)
+                msg = f'argument "{self.dest}" requires at least {n_min} arguments'
                 raise argparse.ArgumentTypeError(msg)
             setattr(args, self.dest, values)
     return RequiredLength
+
+def write_clustering_output(contact_map, clustering, **kwargs):
+    """
+    Write the output files for a clustering solution.
+    :param contact_map: relevant contact map
+    :param clustering: the clustering solution
+    :param kwargs: additional command line arguments
+    """
+    if not kwargs['no_report']:
+        # generate report per cluster
+        cluster_report(contact_map,
+                       clustering,
+                       assembler=kwargs['assembler'],
+                       source_fasta=kwargs['fasta'],
+                       coverage_file=kwargs['coverage'])
+
+    # write MCL clustering file
+    write_mcl(contact_map, os.path.join(kwargs['OUTDIR'], 'clustering.mcl'), clustering)
+    # serialize full clustering object
+    save_object(os.path.join(kwargs['OUTDIR'], 'clustering.p'), clustering)
+
+    if not kwargs['no_report']:
+        # write a tabular report
+        write_report(os.path.join(kwargs['OUTDIR'], 'cluster_report.csv'), clustering)
+
+    if not kwargs['no_fasta']:
+        # write per-cluster fasta files, also separate ordered fasta if an ordering exists
+        write_fasta(contact_map,
+                    kwargs['OUTDIR'],
+                    clustering,
+                    source_fasta=kwargs['fasta'],
+                    clobber=True,
+                    only_large=kwargs['only_large'])
+
+    if not kwargs['no_plot']:
+        # the entire clustering
+        plot_clusters(contact_map,
+                      os.path.join(kwargs['OUTDIR'], f'cluster_plot.{kwargs["plot_format"]}'),
+                      clustering,
+                      max_image_size=kwargs['max_image'],
+                      ordered_only=False,
+                      simple=False,
+                      permute=True,
+                      alpha=kwargs['plot_contrast'])
 
 
 def main():
@@ -67,6 +111,32 @@ def main():
                                  help='Minimum acceptable reference length (default: %(default)s)')
     analysis_parser.add_argument('--min-signal', metavar='COUNTS', type=int, default=_defaults['min_signal'],
                                  help='Minimum acceptable signal (default: %(default)s)')
+
+    # options shared by plotting commands
+    plot_parser = argparse.ArgumentParser(add_help=False)
+    plot_parser.add_argument('--max-image', metavar='PIXELS', type=int, default=_defaults['max_image'],
+                             help='Maximum image size for plots (default: %(default)s)')
+    plot_parser.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
+                             help='File format when writing contact map plot (default: %(default)s)')
+    plot_parser.add_argument('--plot-contrast', metavar="FLOAT", type=float, default=_defaults['plot-contrast'],
+                             help='Contrast factor for plotting smaller->brighter (default: %(default)s)')
+    plot_parser.add_argument('--no-plot', default=False, action='store_true',
+                             help='Do not generate a clustered heatmap')
+
+    report_parser = argparse.ArgumentParser(add_help=False)
+    report_parser.add_argument('--no-report', default=False, action='store_true',
+                               help='Do not generate a cluster report')
+    report_parser.add_argument('--no-fasta', default=False, action='store_true',
+                                 help='Do not generate cluster FASTA files')
+    report_parser.add_argument('--only-large', default=False, action='store_true',
+                               help='Only write FASTA for clusters longer than min_extent')
+    report_parser.add_argument('--coverage', metavar='PATH', default=None,
+                                 help='Per-sequence depth of coverage data format: "seq_id,value" (default: %(default)s)')
+    report_parser.add_argument('--fasta', metavar='PATH', default=None,
+                                 help='Alternative location of source FASTA from that supplied during mkmap')
+    report_parser.add_argument('--assembler', choices=['generic', 'spades', 'megahit', 'flye'], default='generic',
+                               help='Assembly software used to create contigs (default: %(default)s)')
+
 
     parser = argparse.ArgumentParser(description='bin3C: a tool for Hi-C based metagenome-assembled genome binning',
                                      add_help=True)
@@ -115,32 +185,14 @@ def main():
     cluster the map and save results
     """
     cmd_cluster = command_parsers.add_parser('cluster',
-                                             parents=[global_parser, analysis_parser],
+                                             parents=[global_parser, analysis_parser, report_parser, plot_parser],
                                              description='Cluster an existing contact map into genome bins.')
     cmd_cluster.add_argument('-s', '--seed', metavar='INT', default=None, help='Random seed (default: %(default)s)')
-    cmd_cluster.add_argument('--max-image', metavar='PIXELS', type=int, default=_defaults['max_image'],
-                             help='Maximum image size for plots (default: %(default)s)')
-    cmd_cluster.add_argument('--no-report', default=False, action='store_true',
-                             help='Do not generate a cluster report')
-    cmd_cluster.add_argument('--assembler', choices=['generic', 'spades', 'megahit', 'flye'], default='generic',
-                             help='Assembly software used to create contigs (default: %(default)s)')
-    cmd_cluster.add_argument('--no-plot', default=False, action='store_true',
-                             help='Do not generate a clustered heatmap')
-    cmd_cluster.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
-                             help='File format when writing contact map plot (default: %(default)s)')
     cmd_cluster.add_argument('--norm-method', default=_defaults['norm-method'],
                              choices=['sites', 'length', 'gothic'],
                              help='Contact map normalisation method (default: %(default)s)')
-    cmd_cluster.add_argument('--no-fasta', default=False, action='store_true',
-                             help='Do not generate cluster FASTA files')
-    cmd_cluster.add_argument('--only-large', default=False, action='store_true',
-                             help='Only write FASTA for clusters longer than min_extent')
-    cmd_cluster.add_argument('--coverage', metavar='PATH', default=None,
-                             help='Per-sequence depth of coverage data format: "seq_id,value" (default: %(default)s)')
     # cmd_cluster.add_argument('--algo', default='infomap', choices=['infomap', 'louvain', 'mcl', 'slm', 'simap'],
     #                          help='Clustering algorithm to apply [infomap]')
-    cmd_cluster.add_argument('--fasta', metavar='PATH', default=None,
-                             help='Alternative location of source FASTA from that supplied during mkmap')
     cmd_cluster.add_argument('--gfa', metavar='PATH', default=None,
                              help='Location of assembly GFA file for multilayer clustering')
     cmd_cluster.add_argument('--n-iter', '-N', metavar="INT", type=int, default=_defaults['n-iter'],
@@ -156,8 +208,6 @@ def main():
                              help='Enable Infomap entropy correction')
     cmd_cluster.add_argument('--fdr-alpha', metavar="FLOAT", type=float, default=_defaults['fdr-alpha'],
                              help='Alpha used in GOTHiC normalisation and rejection (default: %(default)s)')
-    cmd_cluster.add_argument('--plot-contrast', metavar="FLOAT", type=float, default=_defaults['plot-contrast'],
-                             help='Contrast factor for plotting smaller->brighter (default: %(default)s)')
     cmd_cluster.add_argument('--vary-markov', default=False, action='store_true',
                              help='Enable Infomap variable markov time')
     cmd_cluster.add_argument('--markov-scale', metavar="FLOAT", type=float, default=_defaults['markov-scale'],
@@ -181,33 +231,50 @@ def main():
     extract a single cluster
     """
     cmd_extract = command_parsers.add_parser('extract',
-                                             parents=[global_parser],
+                                             parents=[global_parser, plot_parser],
                                              description='Extract a representation of single cluster')
     cmd_extract.add_argument('--threads', metavar='INT', type=int, default=_defaults['threads'],
                              help='Number of IO threads for accessing BAM file (default: %(default)s)')
-    cmd_extract.add_argument('--max-image', metavar='PIXELS', type=int, default=_defaults['max_image'],
-                             help='Maximum image size for plots (default: %(default)s)')
     cmd_extract.add_argument('--use-extent', default=False, action='store_true',
                              help='For plots use extent map rather than sequence map if available')
     cmd_extract.add_argument('--show-sequences', default=False, action='store_true',
                              help='For plots grid lines and labels mark individual '
                                   'sequences rather than whole clusters')
     cmd_extract.add_argument('-b', '--bam', help='Alternative location of source BAM file')
-    cmd_extract.add_argument('--plot-format', default='png', choices=['png', 'pdf'],
-                             help='File format when writing contact map plot (default: %(default)s)')
     cmd_extract.add_argument('--norm-method', default=_defaults['norm-method'],
                              choices=['sites', 'length', 'gothic'],
                              help='Contact map normalisation method (default: %(default)s)')
     cmd_extract.add_argument('-f', '--format', choices=['graph', 'plot', 'bam'], default='plot',
                              help='Select output format (default: %(default)s)')
-    cmd_extract.add_argument('--plot-contrast', metavar="FLOAT", type=float, default=0.001,
-                             help='Contrast factor for plotting smaller->brighter (default: %(default)s)')
     cmd_extract.add_argument('--min-extent', metavar='NBASES', type=int, default=_defaults['min_extent'],
                                  help='Minimum cluster extent used in output (default: %(default)s)')
     cmd_extract.add_argument('MAP', help='bin3C contact map')
     cmd_extract.add_argument('CLUSTERING', help='bin3C clustering object')
     cmd_extract.add_argument('OUTDIR', help='Output directory')
-    cmd_extract.add_argument('CLUSTER_ID', nargs='*', type=int, help='1-based Cluster number (eg. 1,2,..,99)')
+    cmd_extract.add_argument('CLUSTER_ID', nargs='*', type=int,
+                             help='1-based Cluster number (eg. 1,2,..,99)')
+
+    """
+    revise a clustering solution
+    """
+    cmd_revise = command_parsers.add_parser('revise', parents=[global_parser, report_parser, plot_parser],
+                                            description='Revise a clustering solution')
+    cmd_revise.add_argument('--from-extent', default=False, action='store_true',
+                             help='Derive a normalised sequence map from the extent map')
+    cmd_revise.add_argument('--norm-method', default=_defaults['norm-method'],
+                             choices=['sites', 'length', 'gothic'],
+                             help='Contact map normalisation method (default: %(default)s)')
+    cmd_revise.add_argument('--fdr-alpha', metavar="FLOAT", type=float, default=_defaults['fdr-alpha'],
+                             help='Alpha used in GOTHiC normalisation and rejection (default: %(default)s)')
+    cmd_revise.add_argument('--algorithm', choices=['label_propagation', 'greedy_modularity', 'louvain'],
+                            default='greedy_modularity', help='Partitioning algorithm to apply')
+    cmd_revise.add_argument('--only-new', default=False, action='store_true',
+                            help='Return only the revised clusters')
+    cmd_revise.add_argument('MAP', help='bin3C contact map')
+    cmd_revise.add_argument('CLUSTERING', help='bin3C clustering object')
+    cmd_revise.add_argument('OUTDIR', help='Output directory')
+    cmd_revise.add_argument('CLUSTER_ID', nargs='+', type=int,
+                            help='1-based Cluster number (eg. 1,2,..,99)')
 
     args = parser.parse_args()
 
@@ -222,7 +289,7 @@ def main():
     try:
         make_dir(args.OUTDIR, args.clobber)
     except IOError as ex:
-        print('Error: {}'.format(ex))
+        print(f'Error: {ex}')
         sys.exit(1)
 
     logging.captureWarnings(True)
@@ -257,7 +324,7 @@ def main():
     # Add some environmental details
     logger.debug(version_stamp(False))
     logger.debug(sys.version.replace('\n', ' '))
-    logger.debug('Command line: {}'.format(reconstruct_cmdline()))
+    logger.debug(f'Command line: {reconstruct_cmdline()}')
 
     try:
 
@@ -270,7 +337,7 @@ def main():
                     logger.warning('[Experimental] It is recommended to use tip sizes no smaller than 5kbp')
                 if args.tip_size > args.min_reflen:
                     msg = 'min-reflen cannot be smaller than the tip-size'
-                    logger.error('[Experimental] {}'.format(msg))
+                    logger.error(f'[Experimental] {msg}')
                     raise ApplicationException(msg)
 
             # check if the user has employed the library kit option to declare enzymes
@@ -279,10 +346,10 @@ def main():
                 kit_choices = {'phase': ['Sau3AI', 'MluCI'],
                                'arima': ['DpnII', 'HinfI']}
                 args.enzyme = kit_choices[args.library_kit]
-                logger.info('Library kit {} declares enzymes {}'.format(args.library_kit, args.enzyme))
+                logger.info(f'Library kit {args.library_kit} declares enzymes {args.enzyme}')
 
             # Create a contact map for analysis
-            cm = ContactMap(args.BAM,
+            contact_map = ContactMap(args.BAM,
                             args.enzyme,
                             args.FASTA,
                             args.min_insert,
@@ -298,17 +365,17 @@ def main():
                             precount=args.eta,
                             threads=args.threads)
 
-            if cm.is_empty():
+            if contact_map.is_empty():
                 logger.info('Stopping as the map is empty')
                 sys.exit(1)
 
             logger.info('Saving contact map instance')
-            save_object(os.path.join(args.OUTDIR, 'contact_map.p'), cm)
+            save_object(os.path.join(args.OUTDIR, 'contact_map.p'), contact_map)
 
         elif args.command == 'combine':
             cm_summed = None
             for cm_file in args.MAP:
-                logger.info('Loading contact map: {}'.format(cm_file))
+                logger.info(f'Loading contact map: {cm_file}')
                 if cm_summed is None:
                     cm_summed = load_object(cm_file)
                 else:
@@ -320,34 +387,36 @@ def main():
 
             if not args.seed:
                 args.seed = make_random_seed()
-                logger.info('Generated random seed: {}'.format(args.seed))
+                logger.info(f'Generated random seed: {args.seed}')
             else:
-                logger.info("User set random seed: {}".format(args.seed))
+                logger.info(f'User set random seed: {args.seed}')
 
             # Load a pre-existing serialized contact map
-            logger.info('Loading existing contact map from: {}'.format(args.MAP))
-            cm = load_object(args.MAP)
+            logger.info(f'Loading existing contact map from: {args.MAP}')
+            contact_map = load_object(args.MAP)
 
             if args.min_extent is not None:
-                cm.min_extent = args.min_extent
+                contact_map.min_extent = args.min_extent
 
             # in cases where a user supplies a value, we will need to redo the acceptance mask
             # otherwise the mask will have been done with default values.
             remask = False
             if args.min_signal is not None:
-                cm.min_sig = args.min_signal
+                contact_map.min_sig = args.min_signal
                 remask = True
             if args.min_reflen is not None:
-                cm.min_len = args.min_reflen
+                contact_map.min_len = args.min_reflen
                 remask = True
 
             if remask:
-                cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
+                contact_map.set_primary_acceptance_mask(min_sig=contact_map.min_sig,
+                                                        min_len=contact_map.min_len,
+                                                        update=True)
 
             exclude_names = None
             if args.exclude_from:
                 exclude_names = []
-                logger.info('Reading excluded ids from {}'.format(args.exclude_from))
+                logger.info(f'Reading excluded ids from {args.exclude_from}')
                 for _nm in open(args.exclude_from, 'r'):
                     _nm = _nm.strip()
                     if not _nm or _nm.startswith('#'):
@@ -355,7 +424,7 @@ def main():
                     exclude_names.append(_nm)
 
             # cluster the entire map
-            clustering = cluster_map(cm,
+            clustering = cluster_map(contact_map,
                                       seed=args.seed,
                                       work_dir=args.OUTDIR,
                                       n_iter=args.n_iter,
@@ -369,49 +438,31 @@ def main():
                                       regularize=args.regularize,
                                       vary_markov=args.vary_markov)
 
-            if not args.no_report:
-                # generate report per cluster
-                cluster_report(cm,
-                               clustering,
-                               assembler=args.assembler,
-                               source_fasta=args.fasta,
-                               coverage_file=args.coverage)
+            write_clustering_output(contact_map, clustering, **vars(args))
 
-            # write MCL clustering file
-            write_mcl(cm, os.path.join(args.OUTDIR, 'clustering.mcl'), clustering)
-            # serialize full clustering object
-            save_object(os.path.join(args.OUTDIR, 'clustering.p'), clustering)
+        elif args.command == 'revise':
 
-            if not args.no_report:
-                # write a tabular report
-                write_report(os.path.join(args.OUTDIR, 'cluster_report.csv'), clustering)
+            logger.info(f'Loading contact map from: {args.MAP}')
+            contact_map = load_object(args.MAP)
 
-            if not args.no_fasta:
-                # write per-cluster fasta files, also separate ordered fasta if an ordering exists
-                write_fasta(cm,
-                            args.OUTDIR,
-                            clustering,
-                            source_fasta=args.fasta,
-                            clobber=True,
-                            only_large=args.only_large)
+            logger.info(f'Loading clustering solution from: {args.CLUSTERING}')
+            clustering = load_object(args.CLUSTERING)
 
-            if not args.no_plot:
-                # the entire clustering
-                plot_clusters(cm,
-                              os.path.join(args.OUTDIR, 'cluster_plot.{}'.format(args.plot_format)),
-                              clustering,
-                              max_image_size=args.max_image,
-                              ordered_only=False,
-                              simple=False,
-                              permute=True,
-                              alpha=args.plot_contrast)
+            cluster_ids = np.asarray(args.CLUSTER_ID, dtype=np.int64) - 1
+            logger.info(f'Revising {len(cluster_ids)} clusters')
+
+            revised = revise_clusters(cluster_ids, contact_map, clustering, algorithm_name=args.algorithm,
+                                      from_extent=args.from_extent, norm_method=args.norm_method,
+                                      fdr_alpha=args.fdr_alpha, only_new=args.only_new)
+
+            write_clustering_output(contact_map, revised, **vars(args))
 
         elif args.command == 'extract':
 
-            logger.info('Loading contact map from: {}'.format(args.MAP))
-            cm = load_object(args.MAP)
+            logger.info(f'Loading contact map from: {args.MAP}')
+            contact_map = load_object(args.MAP)
 
-            logger.info('Loading clustering solution from: {}'.format(args.CLUSTERING))
+            logger.info(f'Loading clustering solution from: {args.CLUSTERING}')
             clustering = load_object(args.CLUSTERING)
 
             # Convert public string ids to internal 0-based integer ids
@@ -420,23 +471,23 @@ def main():
                 logger.info('Extracting all clusters')
             else:
                 cluster_ids = np.asarray(args.CLUSTER_ID, dtype=np.int64) - 1
-                logger.info('Extracting {} clusters'.format(len(cluster_ids)))
+                logger.info(f'Extracting {len(cluster_ids)} clusters')
 
             if args.format in ['plot', 'graph']:
                 # ensure that selected clusters are not masked
-                cm.min_sig = 0
-                cm.min_len = 0
-                cm.min_extent = 0
-                cm.set_primary_acceptance_mask(min_sig=cm.min_sig, min_len=cm.min_len, update=True)
-                cm.prepare_seq_map(norm=True, bisto=True, norm_method=args.norm_method)
+                contact_map.min_sig = 0
+                contact_map.min_len = 0
+                contact_map.min_extent = 0
+                contact_map.set_primary_acceptance_mask(min_sig=contact_map.min_sig, min_len=contact_map.min_len, update=True)
+                contact_map.prepare_seq_map(norm=True, bisto=True, norm_method=args.norm_method)
 
             if args.format == 'plot':
 
-                if args.use_extent and cm.extent_map is None:
+                if args.use_extent and contact_map.extent_map is None:
                     logger.error('An extent map was not generated when creating the specified contact map')
 
-                plot_clusters(cm,
-                              os.path.join(args.OUTDIR, 'extracted.{}'.format(args.plot_format)),
+                plot_clusters(contact_map,
+                              os.path.join(args.OUTDIR, f'extracted.{args.plot_format}'),
                               clustering,
                               max_image_size=args.max_image,
                               min_extent=args.min_extent,
@@ -450,7 +501,7 @@ def main():
 
             elif args.format == 'graph':
 
-                g = to_graph(cm,
+                g = to_graph(contact_map,
                              norm=True,
                              bisto=True,
                              node_id_type='external',
@@ -463,7 +514,7 @@ def main():
 
             elif args.format == 'bam':
 
-                out_file, n_refs, n_pairs = extract_bam(cm,
+                out_file, n_refs, n_pairs = extract_bam(contact_map,
                                                         clustering,
                                                         args.OUTDIR,
                                                         cluster_ids,
@@ -473,10 +524,10 @@ def main():
                                                         version=version_stamp(False),
                                                         cmdline=reconstruct_cmdline())
 
-                logger.info('Output BAM {} contains {:,} references and {:,} pairs'.format(out_file, n_refs, n_pairs))
+                logger.info(f'Output BAM {out_file} contains {n_refs:,} references and {n_pairs:,} pairs')
 
             else:
-                raise ApplicationException('Unknown format option {}'.format(args.format))
+                raise ApplicationException(f'Unknown format option {args.format}')
 
     except ApplicationException as ex:
         logger.error(ex)
