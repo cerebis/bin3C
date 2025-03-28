@@ -1,7 +1,7 @@
 include { SegmentTopology } from './binning_qc'
 
 process VirSorter {
-    cpus 24
+    cpus 32
     memory '100 GB'
     publishDir params.outdir, mode: 'link', saveAs: {fn -> "mge_analysis/virus/${fn}"}
     conda params.conda.virsorter
@@ -15,7 +15,7 @@ process VirSorter {
     path('virsorter_out/final-viral-score.tsv'), emit: prediction
 
     """
-    virsorter run --tmpdir ./local_tmp --rm-tmpdir -j ${task.cpus} \
+    virsorter run --tmpdir ./local_tmp --rm-tmpdir -j ${task.cpus-4} \
         --include-groups ${params.virsorter.groups} --min-length 2500 \
         --provirus-off -w virsorter_out -i $contigs
     """

@@ -177,8 +177,8 @@ def combine_qc_results(out_dir,
           + labs(x='QC Method', y='Number of MAGs', fill='MIMAG Quality')
           + theme_bw() + theme(figure_size=[6,5], legend_position='bottom', legend_title=element_blank())
           )
-    ggsave(p, filename=f'{out_dir}/quality_breakdown.png', dpi=300)
-    ggsave(p, filename=f'{out_dir}/quality_breakdown.svg')
+    p.save(filename=f'{out_dir}/quality_breakdown.png', dpi=300, verbose=False)
+    p.save(filename=f'{out_dir}/quality_breakdown.svg', verbose=False)
 
 if __name__ == "__main__":
     import argparse

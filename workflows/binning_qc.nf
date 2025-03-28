@@ -3,12 +3,13 @@ include { RNA_report } from './rna_report'
 process CheckM {
     cpus 24
     memory '128 GB'
-    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "binning_qc/${fn}"}
+    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "${publish_subdir}/${fn}"}
     conda params.conda.checkm1
     scratch params.scratch_dir
 
     input:
     path(cluster_dir)
+    val(publish_subdir)
 
     output:
     path("checkm_out")
@@ -22,12 +23,13 @@ process CheckM {
 process CheckM2 {
     cpus 24
     memory '128 GB'
-    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "binning_qc/${fn}"}
+    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "${publish_subdir}/${fn}"}
     conda params.conda.checkm2
     scratch params.scratch_dir
 
     input:
     path(cluster_dir)
+    val(publish_subdir)
 
     output:
     path("checkm2_out")
@@ -41,12 +43,13 @@ process CheckM2 {
 process CocoPye {
     cpus 8
     memory '64 GB'
-    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "binning_qc/${fn}"}
+    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "${publish_subdir}/${fn}"}
     conda params.conda.cocopye
     scratch params.scratch_dir
 
     input:
     path(cluster_dir)
+    val(publish_subdir)
 
     output:
     path("cocopye_out.csv")
@@ -57,14 +60,15 @@ process CocoPye {
 }
 
 process GTDBtk {
-    cpus 32
-    memory '400 GB'
-    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "binning_qc/${fn}"}
+    cpus 28
+    memory '450 GB'
+    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "${publish_subdir}/${fn}"}
     conda params.conda.gtdbtk
     scratch params.scratch_dir
 
     input:
     path(cluster_dir)
+    val(publish_subdir)
 
     output:
     path("gtdb_out")
@@ -81,7 +85,7 @@ process GTDBtk {
 process CollateResults {
     cpus 1
     memory '8 GB'
-    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "binning_qc/${fn}"}
+    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "${publish_subdir}/${fn}"}
     conda params.conda.rnareport
 
     input:
@@ -91,6 +95,7 @@ process CollateResults {
     path(checkm2_out)
     path(cocopye_out)
     path(gtdb_out)
+    val(publish_subdir)
 
     output:
     path("qc_collated")
@@ -131,6 +136,7 @@ workflow QualityControl {
     take:
     cat_table
     cluster_dir
+    publish_subdir
 
     main:
     CheckM(cluster_dir)
@@ -145,6 +151,9 @@ workflow QualityControl {
         CheckM.out, 
         CheckM2.out, 
         CocoPye.out, 
-        GTDBtk.out)
+        GTDBtk.out,
+        publish_subdir)
 
+    emit:
+    qc_dir = CollateResults.out
 }

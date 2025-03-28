@@ -1,7 +1,7 @@
 from proxigenomics_toolkit.contact_map import *
 from proxigenomics_toolkit.exceptions import ApplicationException
 from proxigenomics_toolkit.io_utils import load_object, save_object
-from proxigenomics_toolkit.misc_utils import make_random_seed
+from proxigenomics_toolkit.misc_utils import make_random_seed, make_dir
 from bin3C._version import version_stamp
 
 import argparse
@@ -259,6 +259,8 @@ def main():
     """
     cmd_revise = command_parsers.add_parser('revise', parents=[global_parser, report_parser, plot_parser],
                                             description='Revise a clustering solution')
+    cmd_revise.add_argument('--min-extent', metavar='NBASES', type=int, default=_defaults['min_extent'],
+                             help='Minimum cluster extent used in output (default: %(default)s)')
     cmd_revise.add_argument('--from-extent', default=False, action='store_true',
                              help='Derive a normalised sequence map from the extent map')
     cmd_revise.add_argument('--norm-method', default=_defaults['norm-method'],
@@ -272,9 +274,9 @@ def main():
                             help='Return only the revised clusters')
     cmd_revise.add_argument('MAP', help='bin3C contact map')
     cmd_revise.add_argument('CLUSTERING', help='bin3C clustering object')
+    cmd_revise.add_argument('TARGETS', metavar='FILE',
+                             help='Single column ist of cluster names to revise. (Example names: CL001, CL002)')
     cmd_revise.add_argument('OUTDIR', help='Output directory')
-    cmd_revise.add_argument('CLUSTER_ID', nargs='+', type=int,
-                            help='1-based Cluster number (eg. 1,2,..,99)')
 
     args = parser.parse_args()
 
@@ -417,7 +419,7 @@ def main():
             if args.exclude_from:
                 exclude_names = []
                 logger.info(f'Reading excluded ids from {args.exclude_from}')
-                for _nm in open(args.exclude_from, 'r'):
+                for _nm in open(args.exclude_from, 'rt'):
                     _nm = _nm.strip()
                     if not _nm or _nm.startswith('#'):
                         continue
@@ -448,10 +450,27 @@ def main():
             logger.info(f'Loading clustering solution from: {args.CLUSTERING}')
             clustering = load_object(args.CLUSTERING)
 
-            cluster_ids = np.asarray(args.CLUSTER_ID, dtype=np.int64) - 1
-            logger.info(f'Revising {len(cluster_ids)} clusters')
+            if args.min_extent is not None:
+                contact_map.min_extent = args.min_extent
 
-            revised = revise_clusters(cluster_ids, contact_map, clustering, algorithm_name=args.algorithm,
+            import re
+            id_pattern = re.compile(r'CL(\d+)')
+            target_ids = []
+            logger.info(f'Reading target cluster names from {args.TARGETS}')
+            for _nm in open(args.TARGETS, 'rt'):
+                m = id_pattern.match(_nm)
+                if m is None:
+                    raise ValueError(f'The cluster {_nm} was not of the form CL{{int}}. e.g. CL001, CL123')
+                target_ids.append(m.group(1))
+
+            if len(target_ids) == 0:
+                raise ApplicationException('The list of target clusters was empty')
+
+            # convert to 0-based integers
+            target_ids = np.asarray(target_ids, dtype=np.int64) - 1
+            logger.info(f'Revising {len(target_ids)} clusters')
+
+            revised = revise_clusters(target_ids, contact_map, clustering, algorithm_name=args.algorithm,
                                       from_extent=args.from_extent, norm_method=args.norm_method,
                                       fdr_alpha=args.fdr_alpha, only_new=args.only_new)
 

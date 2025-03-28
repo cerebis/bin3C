@@ -1,4 +1,5 @@
 include { QualityControl } from './binning_qc'
+include { QualityControl as Stage2QualityControl } from './binning_qc'
 include { MGEAnalysis    } from './mge_analysis'
 
 process ProcessGFA {
@@ -207,9 +208,45 @@ workflow ContactMapAndClustering {
             excludes)
 
     emit:
-    ClusterMetagenome.out
+    cluster_dir = ClusterMetagenome.out
+    map_dir = MakeContactMap.out
 }
 
+process ReviseClusters {
+    cpus 2
+    memory '32 GB'
+    conda params.conda.revise
+    scratch params.scratch_dir
+    publishDir params.outdir, mode: 'copy'
+
+    input:
+    path(asm_fasta)
+    path(map_dir)
+    path(cluster_dir)
+    path(qc_dir)
+
+    output:
+    path('revised_out')
+
+    """
+    mkdir revised_out
+
+    select_contaminated.py --min-extent ${params.revise.min_extent} \
+        --min-contamination ${params.revise.min_contamination} \
+        --min-completeness ${params.revise.min_completeness} \
+        ${qc_dir}/qc_summary.csv > revised_out/target.ids
+
+    bin3C revise --verbose --clobber \
+        --algorithm ${params.revise.algorithm} \
+        --assembler ${params.bin3c.assembler} \
+        --fdr-alpha ${params.bin3c.fdr_alpha} \
+        --from-extent --norm-method ${params.bin3c.norm_method} \
+        --plot-contrast ${params.bin3c.plot_contrast} \
+        --min-extent ${params.bin3c.min_extent} \
+        --fasta $asm_fasta \
+        "${map_dir}/contact_map.p.gz" "${cluster_dir}/clustering.p.gz" revised_out revised_out/target.ids
+    """
+}
 
 // Main workflow to chain everything together
 workflow {
@@ -229,14 +266,30 @@ workflow {
             Preprocessing.out.circular_ids,
             CAT.out.result_table)
 
+    // Stage 1
     // Run ContactMapAndClustering
     ContactMapAndClustering(
             Preprocessing.out.segments,
             Preprocessing.out.bam_file,
             MGEAnalysis.out.confident_mges)
 
-    // Run QualityControl
+    // Stage 1 QC
     QualityControl(
             CAT.out.result_table,
-            ContactMapAndClustering.out)
+            ContactMapAndClustering.out.cluster_dir,
+            'stage1_qc')
+
+    // Stage 2
+    // Potentially revise larger clusters with contamination
+    ReviseClusters(
+            Preprocessing.out.segments,
+            ContactMapAndClustering.out.map_dir,
+            ContactMapAndClustering.out.cluster_dir,
+            QualityControl.out.qc_dir)
+
+    // QC Stage 2
+    Stage2QualityControl(
+            CAT.out.result_table,
+            ReviseClusters.out,
+            'stage2_qc')
 }
