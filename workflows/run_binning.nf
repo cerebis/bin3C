@@ -1,6 +1,7 @@
 include { QualityControl } from './binning_qc'
 include { QualityControl as Stage2QualityControl } from './binning_qc'
 include { MGEAnalysis    } from './mge_analysis'
+include { PredictIntracellularContacts } from './classify'
 
 process ProcessGFA {
     cpus 2
@@ -15,11 +16,14 @@ process ProcessGFA {
     output:
     path("segments.fna"), emit: segments
     path("circular.ids"), emit: circular_ids
+    path("coverage.csv"), emit: coverage
 
-    """
-    gfa_utils dump-segments $gfa_file segments.fna
-    gfa_utils isolates --circular $gfa_file | sed 1d | cut -d, -f1 > circular.ids
-    """
+    shell:
+    '''
+    gfa_utils dump-segments !{gfa_file} segments.fna
+    gfa_utils isolates --circular !{gfa_file} | sed 1d | cut -d, -f1 > circular.ids
+    awk 'BEGIN{OFS=","} /^>/ {print substr($1,2),substr($2,4)}' segments.fna > coverage.csv
+    '''
 }
 
 process MappabilityMasking {
@@ -33,13 +37,15 @@ process MappabilityMasking {
     path(segments)
 
     output:
-    path('genmap.*')
+    path('genmap.bed'), emit: bed
+    path('genmap.bedgraph'), emit: bedgraph
+    path('genmap.txt'), emit: text
     path("segments.masked.fna"), emit: masked
 
     shell:
     '''
     genmap index -F !{segments} -I genmap.index && \
-        genmap map -T !{task.cpus} -I genmap.index -O genmap -bg -K !{params.genmap.kmer} && \
+        genmap map -T !{task.cpus} -I genmap.index -O genmap -t -bg -K !{params.genmap.kmer} && \
         gawk -F '\t' 'BEGIN {OFS="\t"} {if ($4 < !{params.genmap.minscore}) print $1, $2, $3, ".", $4; }' genmap.bedgraph > genmap.bed && \
         bedtools maskfasta -fi !{segments} -fo segments.masked.fna -bed genmap.bed
     '''
@@ -50,7 +56,7 @@ process IndexAndMap {
     memory '32 GB'
     publishDir params.outdir, mode: 'copy'
     scratch params.scratch_dir
-    //conda params.conda.bin3c
+    conda params.conda.htslib
 
     input:
     path(asm_fasta)
@@ -59,8 +65,10 @@ process IndexAndMap {
 
     output:
     path("hic2ctg.bam"), emit: bam_file
+    path("${segments}.fai"), emit: faidx
 
     """
+    samtools faidx $asm_fasta
     bwa index $asm_fasta
     bwa mem -5SP -t ${task.cpus} $asm_fasta $hic_r1 $hic_r2 | \
         samtools view -F 0x904 -@4 -uS | \
@@ -189,8 +197,11 @@ workflow Preprocessing {
 
     emit:
     segments = ProcessGFA.out.segments
+    coverage = ProcessGFA.out.coverage
+    genmap_text = MappabilityMasking.out.text
     circular_ids = ProcessGFA.out.circular_ids
     bam_file = IndexAndMap.out.bam_file
+    faidx = IndexAndMap.out.faidx
 }
 
 // Workflow 2: ContactMapAndClustering
@@ -292,4 +303,15 @@ workflow {
             CAT.out.result_table,
             ReviseClusters.out,
             'stage2_qc')
+
+    // Analyse contacts between sequences and bins and
+    // predict intracellular contacts.
+    PredictIntracellularContacts(
+            ContactMapAndClustering.out.map_dir,
+            ContactMapAndClustering.out.cluster_dir,
+            Preprocessing.out.coverage,
+            Preprocessing.out.genmap_text,
+            Preprocessing.out.segments,
+            Preprocessing.out.faidx,
+            QualityControl.out.qc_dir)
 }
