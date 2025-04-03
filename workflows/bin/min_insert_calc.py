@@ -11,4 +11,4 @@ assert os.path.exists(qc3c_filename), f'The file {qc3c_filename} does not exist'
 
 with open(qc3c_filename, 'rt') as hndl:
     qc3c_report = json.load(hndl)
-    print(f'{scale_factor * qc3c_report["obs_insert_mean"]}')
+    print(f'{scale_factor * qc3c_report["obs_insert_mean"]:.0f}')
