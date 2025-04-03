@@ -274,8 +274,8 @@ def main():
                             help='Return only the revised clusters')
     cmd_revise.add_argument('MAP', help='bin3C contact map')
     cmd_revise.add_argument('CLUSTERING', help='bin3C clustering object')
-    cmd_revise.add_argument('TARGETS', metavar='FILE',
-                             help='Single column ist of cluster names to revise. (Example names: CL001, CL002)')
+    cmd_revise.add_argument('TARGETS', metavar='TARGET_LIST',
+                             help='Single column list of cluster names targeted for revision. (Example names: CL001, CL002)')
     cmd_revise.add_argument('OUTDIR', help='Output directory')
 
     args = parser.parse_args()

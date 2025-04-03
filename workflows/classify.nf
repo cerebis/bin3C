@@ -25,9 +25,10 @@ process AnalyseContacts {
 }
 
 process ComputeEmbeddings {
-    cpus 2
-    gpus 1
+    queue 'gpuq'
+    cpus 8
     memory '64 GB'
+    accelerator 1
     conda params.conda.seq_embed
     scratch params.scratch_dir
     publishDir params.outdir, mode: 'copy'
@@ -39,7 +40,8 @@ process ComputeEmbeddings {
     path('embeddings.p.gz')
 
     """
-    embed.py --seed ${params.bin3c.seed} \
+    embed.py \
+        --seed ${params.bin3c.seed} \
         --device-id ${params.seq_embed.device_id} \
         --chunk-size ${params.seq_embed.chunk_size} \
         --batch-size ${params.seq_embed.batch_size} \
@@ -94,7 +96,6 @@ process ClassifyContacts {
         --n-nodes ${params.sig3c.n_nodes} \
         --n-layers ${params.sig3c.n_layers} \
         --early-stopping \
-        --bagging \
         ${sig3c_dir}
     """
 }

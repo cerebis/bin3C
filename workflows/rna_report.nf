@@ -66,11 +66,12 @@ process CombineReports {
     cpus 1
     memory '8 GB'
     conda params.conda.rnareport
-    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "binning_qc/rna/${fn}"} 
+    publishDir params.outdir, mode: 'copy', saveAs: {fn -> "${publish_subdir}/rna/${fn}"}
 
     input:
     path(tRNA_report)
     path(rRNA_report)
+    val(publish_subdir)
 
     output:
     path('combined.csv')
@@ -87,11 +88,13 @@ process CombineReports {
 workflow RNA_report {
     take:
     cluster_dir
+    publish_subdir
 
     main:
     CountRNA(cluster_dir)
     CombineReports(CountRNA.out.tRNA,
-                   CountRNA.out.rRNA)
+                   CountRNA.out.rRNA,
+                   publish_subdir)
 
     emit:
     CombineReports.out

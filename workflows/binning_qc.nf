@@ -75,10 +75,13 @@ process GTDBtk {
 
     shell:
     '''
-    gtdbtk classify_wf -x !{params.bin_suffix} --cpus !{task.cpus} \
+    gtdbtk classify_wf -x !{params.bin_suffix} \
+        --cpus !{task.cpus} \
+        --pplacer_cpus 1 \
         --genome_dir "!{cluster_dir}/fasta" \
-        --tmpdir . --out_dir "gtdb_out" \
-        --mash_db !{params.gtdbtk.mash_db} 
+        --scratch_dir . --tmpdir . \
+        --mash_db !{params.gtdbtk.mash_db} \
+        --out_dir "gtdb_out"
     '''
 }
 
@@ -98,11 +101,11 @@ process CollateResults {
     val(publish_subdir)
 
     output:
-    path("qc_collated")
+    path("collated")
 
     """
     collate_binqc.py \
-        qc_collated \
+        collated \
         ${cluster_dir}/cluster_report.csv \
         $rna_report \
         ${checkm_out}/quality.tsv \
@@ -139,11 +142,11 @@ workflow QualityControl {
     publish_subdir
 
     main:
-    CheckM(cluster_dir)
-    CheckM2(cluster_dir)
-    CocoPye(cluster_dir)
-    GTDBtk(cluster_dir)
-    RNA_report(cluster_dir)
+    CheckM(cluster_dir, publish_subdir)
+    CheckM2(cluster_dir, publish_subdir)
+    CocoPye(cluster_dir, publish_subdir)
+    GTDBtk(cluster_dir, publish_subdir)
+    RNA_report(cluster_dir, publish_subdir)
 
     CollateResults(
         cluster_dir,

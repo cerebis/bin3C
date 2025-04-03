@@ -1,4 +1,4 @@
-include { QualityControl } from './binning_qc'
+include { QualityControl as Stage1QualityControl } from './binning_qc'
 include { QualityControl as Stage2QualityControl } from './binning_qc'
 include { MGEAnalysis    } from './mge_analysis'
 include { PredictIntracellularContacts } from './classify'
@@ -65,7 +65,7 @@ process IndexAndMap {
 
     output:
     path("hic2ctg.bam"), emit: bam_file
-    path("${segments}.fai"), emit: faidx
+    path("${asm_fasta}.fai"), emit: faidx
 
     """
     samtools faidx $asm_fasta
@@ -74,6 +74,42 @@ process IndexAndMap {
         samtools view -F 0x904 -@4 -uS | \
         samtools sort -@ ${task.cpus} -n -o "hic2ctg.bam"
     """
+}
+
+process HiCLibraryQualityControl {
+    cpus 4
+    memory '16 GB'
+    conda params.conda.qc3c
+    scratch params.scratch_dir
+    publishDir params.outdir, mode: 'copy'
+
+    input:
+    path(asm_fasta)
+    path(bam_file)
+
+    output:
+    path('qc3c_out')
+    path('qc3c_out/report.qc3C.json'), emit: report
+
+    script:
+    if (params.bin3c.enz2 == null) {
+        """
+        qc3C bam -t ${task.cpus} \
+            -M $params.qc3c.max_obs} \
+            -e ${params.bin3c.enz1} \
+            -b $bam_file -f $asm_fasta \
+            -o qc3c_out
+        """
+    }
+    else {
+        """
+        qc3C bam -t ${task.cpus} \
+            -M $params.qc3c.max_obs} \
+            -e ${params.bin3c.enz1} -e ${params.bin3c.enz2} \
+            -b $bam_file -f $asm_fasta \
+            -o qc3c_out
+        """
+    }
 }
 
 process MakeContactMap {
@@ -86,38 +122,43 @@ process MakeContactMap {
     input:
     path(asm_fasta)
     path(bam_file)
+    path(qc3c_report)
 
     output:
     path("map_out")
 
-    script:
+    shell:
     // single enzyme digest
     if (params.bin3c.enz2 == null) {
-        """
-        bin3C mkmap --threads ${task.cpus} \
-            --min-insert ${params.bin3c.min_insert} \
-            --min-extent ${params.bin3c.min_extent} \
-            --min-mapq ${params.bin3c.min_mapq} \
-            --max-edist ${params.bin3c.max_edist} \
-            --bin-size ${params.bin3c.bin_size} \
-            --min-alen ${params.bin3c.min_alen} \
-            -e ${params.bin3c.enz1} \
-            $asm_fasta $bam_file map_out
-        """
+        '''
+        MIN_INSERT=$(min_insert_calc.py !{params.bin3c.min_insert_factor} !{qc3c_report})
+
+        bin3C mkmap --threads !{task.cpus} \
+            --min-insert $MIN_INSERT \
+            --min-extent !{params.bin3c.min_extent} \
+            --min-mapq !{params.bin3c.min_mapq} \
+            --max-edist !{params.bin3c.max_edist} \
+            --bin-size !{params.bin3c.bin_size} \
+            --min-alen !{params.bin3c.min_alen} \
+            -e !{params.bin3c.enz1} \
+            !{asm_fasta} !{bam_file} map_out
+        '''
     }
     // double enzyme digest
     else {
-        """
-        bin3C mkmap --threads ${task.cpus} \
-            --min-insert ${params.bin3c.min_insert} \
-            --min-extent ${params.bin3c.min_extent} \
-            --min-mapq ${params.bin3c.min_mapq} \
-            --max-edist ${params.bin3c.max_edist} \
-            --bin-size ${params.bin3c.bin_size} \
-            --min-alen ${params.bin3c.min_alen} \
-            -e ${params.bin3c.enz1} -e ${params.bin3c.enz2} \
-            $asm_fasta $bam_file map_out
-        """
+        '''
+        MIN_INSERT=$(min_insert_calc.py !{params.bin3c.min_insert_factor} !{qc3c_report})
+        
+        bin3C mkmap --threads !{task.cpus} \
+            --min-insert $MIN_INSERT \
+            --min-extent !{params.bin3c.min_extent} \
+            --min-mapq !{params.bin3c.min_mapq} \
+            --max-edist !{params.bin3c.max_edist} \
+            --bin-size !{params.bin3c.bin_size} \
+            --min-alen !{params.bin3c.min_alen} \
+            -e !{params.bin3c.enz1} -e !{params.bin3c.enz2} \
+            !{asm_fasta} !{bam_file} map_out
+        '''
     }
 }
 
@@ -180,53 +221,10 @@ process CAT {
     '''
 }
 
-// Workflow 1: Preprocessing
-workflow Preprocessing {
-    take:
-    gfa_file
-    hic_r1
-    hic_r2
-
-    main:
-    ProcessGFA(gfa_file)
-    MappabilityMasking(ProcessGFA.out.segments)
-    IndexAndMap(
-            MappabilityMasking.out.masked,
-            hic_r1,
-            hic_r2)
-
-    emit:
-    segments = ProcessGFA.out.segments
-    coverage = ProcessGFA.out.coverage
-    genmap_text = MappabilityMasking.out.text
-    circular_ids = ProcessGFA.out.circular_ids
-    bam_file = IndexAndMap.out.bam_file
-    faidx = IndexAndMap.out.faidx
-}
-
-// Workflow 2: ContactMapAndClustering
-workflow ContactMapAndClustering {
-    take:
-    segments
-    bam_file
-    excludes
-
-    main:
-    MakeContactMap(segments, bam_file)
-    ClusterMetagenome(
-            segments,
-            MakeContactMap.out,
-            excludes)
-
-    emit:
-    cluster_dir = ClusterMetagenome.out
-    map_dir = MakeContactMap.out
-}
-
 process ReviseClusters {
     cpus 2
     memory '32 GB'
-    conda params.conda.revise
+    conda params.conda.bin3c
     scratch params.scratch_dir
     publishDir params.outdir, mode: 'copy'
 
@@ -255,8 +253,58 @@ process ReviseClusters {
         --plot-contrast ${params.bin3c.plot_contrast} \
         --min-extent ${params.bin3c.min_extent} \
         --fasta $asm_fasta \
-        "${map_dir}/contact_map.p.gz" "${cluster_dir}/clustering.p.gz" revised_out revised_out/target.ids
+        "${map_dir}/contact_map.p.gz" "${cluster_dir}/clustering.p.gz" revised_out/target.ids revised_out
     """
+}
+
+// Workflow 1: Preprocessing
+workflow Preprocessing {
+    take:
+    gfa_file
+    hic_r1
+    hic_r2
+
+    main:
+    ProcessGFA(gfa_file)
+    MappabilityMasking(ProcessGFA.out.segments)
+    IndexAndMap(
+            MappabilityMasking.out.masked,
+            hic_r1,
+            hic_r2)
+    HiCLibraryQualityControl(
+            ProcessGFA.out.segments,
+            IndexAndMap.out.bam_file)
+
+    emit:
+    segments = ProcessGFA.out.segments
+    coverage = ProcessGFA.out.coverage
+    genmap_text = MappabilityMasking.out.text
+    circular_ids = ProcessGFA.out.circular_ids
+    bam_file = IndexAndMap.out.bam_file
+    faidx = IndexAndMap.out.faidx
+    qc3c_report = HiCLibraryQualityControl.out.report
+}
+
+// Workflow 2: ContactMapAndClustering
+workflow ContactMapAndClustering {
+    take:
+    segments
+    bam_file
+    excludes
+    qc_report
+
+    main:
+    MakeContactMap(segments,
+            bam_file,
+            qc_report)
+    ClusterMetagenome(
+            segments,
+            MakeContactMap.out,
+            excludes)
+
+    emit:
+    cluster_dir = ClusterMetagenome.out
+    map_dir = MakeContactMap.out
 }
 
 // Main workflow to chain everything together
@@ -282,10 +330,11 @@ workflow {
     ContactMapAndClustering(
             Preprocessing.out.segments,
             Preprocessing.out.bam_file,
-            MGEAnalysis.out.confident_mges)
+            MGEAnalysis.out.confident_mges,
+            Preprocessing.out.qc3c_report)
 
     // Stage 1 QC
-    QualityControl(
+    Stage1QualityControl(
             CAT.out.result_table,
             ContactMapAndClustering.out.cluster_dir,
             'stage1_qc')
@@ -296,7 +345,7 @@ workflow {
             Preprocessing.out.segments,
             ContactMapAndClustering.out.map_dir,
             ContactMapAndClustering.out.cluster_dir,
-            QualityControl.out.qc_dir)
+            Stage1QualityControl.out.qc_dir)
 
     // QC Stage 2
     Stage2QualityControl(
@@ -313,5 +362,5 @@ workflow {
             Preprocessing.out.genmap_text,
             Preprocessing.out.segments,
             Preprocessing.out.faidx,
-            QualityControl.out.qc_dir)
+            Stage1QualityControl.out.qc_dir)
 }

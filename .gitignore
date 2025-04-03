@@ -110,5 +110,6 @@ venv.bak/
 # mkdocs documentation
 /site
 
-# mypy
 .mypy_cache/
+/sim_comm/
+/sim_comm_2/
