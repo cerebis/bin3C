@@ -7,13 +7,13 @@ There is NO WARRANTY, to the extent permitted by law.
 """
 
 
-def version_stamp(full=True):
+def version_stamp(full: bool=True) -> str:
     """
     Create a string indicating the version and possibly extended details such as copyright
     :param full: when True add extended details (multi-line)
     :return: a version stamp string
     """
     if full:
-        return 'bin3C {}\n{}'.format(__version__, __copyright__)
+        return f'bin3C {__version__}\n{__copyright__}'
     else:
-        return 'bin3C {}'.format(__version__)
+        return 'bin3C {__version__}'

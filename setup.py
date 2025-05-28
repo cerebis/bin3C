@@ -14,7 +14,7 @@ with open(VERSION_FILE, "rt") as vh:
             break
 
 if version_str is None:
-    raise RuntimeError("Unable to find version string in {}".format(VERSION_FILE))
+    raise RuntimeError(f'Unable to find version string in {VERSION_FILE}')
 
 setuptools.setup(
     name='bin3C',
@@ -27,10 +27,10 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     url='https://github.com/cerebis/bin3C',
     license='GNU Affero General Public License v3',
-
+    include_package_data=True,
     install_requires=['proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@mldev#egg=proxigenomics_toolkit'],
-
     classifiers=[
+        'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.11',
         'License :: OSI Approved :: GNU Affero General Public License v3',
         'Operating System :: POSIX :: Linux',

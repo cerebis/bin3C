@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+dynamic = ["version"]
+name = "bin3C"
+description = "Extract metagenome-assembled genomes from metagenomic data using Hi-C linkage information"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Matthew Z DeMaere", email = "matt.demaere@gmail.com" },
+]
+keywords = ["bioinformatics", "3C", "genomics", "metagenomics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: POSIX :: Linux",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+dependencies = [
+    "proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@mldev",
+]
+
+[project.urls]
+Homepage = "https://github.com/cerebis/bin3C"
+Repository = "https://github.com/cerebis/bin3C"
+
+[project.scripts]
+bin3C = "bin3C.command_line:main"
+
+[tool.setuptools.packages]
+find = {}

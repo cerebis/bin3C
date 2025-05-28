@@ -1,16 +1,20 @@
-from proxigenomics_toolkit.contact_map import *
+from proxigenomics_toolkit.contact_map import (ContactMap, cluster_report, plot_clusters, cluster_map, extract_bam,
+                                               revise_clusters, to_graph, write_fasta, write_mcl, write_report)
 from proxigenomics_toolkit.exceptions import ApplicationException
 from proxigenomics_toolkit.io_utils import load_object, save_object
 from proxigenomics_toolkit.misc_utils import make_random_seed, make_dir
 from bin3C._version import version_stamp
 
+import numpy as np
+import networkx as nx
 import argparse
 import logging
+import os
 import sys
-from pipes import quote
+from shlex import quote
 
 
-def reconstruct_cmdline():
+def reconstruct_cmdline() -> str:
     """
     Reconstruct what could have been the command line, where arguments are properly escaped
     and quoted.
@@ -19,7 +23,7 @@ def reconstruct_cmdline():
     return ' '.join(map(quote, sys.argv))
 
 
-def required_length(n_min):
+def required_length(n_min: int):
     class RequiredLength(argparse.Action):
         def __call__(self, parser, args, values, option_string=None):
             if len(values) < n_min:
@@ -28,7 +32,8 @@ def required_length(n_min):
             setattr(args, self.dest, values)
     return RequiredLength
 
-def write_clustering_output(contact_map, clustering, **kwargs):
+
+def write_clustering_output(contact_map: ContactMap, clustering: dict, **kwargs) -> None:
     """
     Write the output files for a clustering solution.
     :param contact_map: relevant contact map
@@ -73,7 +78,7 @@ def write_clustering_output(contact_map, clustering, **kwargs):
                       alpha=kwargs['plot_contrast'])
 
 
-def main():
+def main() -> None:
 
     _defaults = {
         'min_reflen': 2500,
@@ -343,7 +348,7 @@ def main():
                     raise ApplicationException(msg)
 
             # check if the user has employed the library kit option to declare enzymes
-            if args.command in {'kmer', 'bam'} and args.library_kit is not None:
+            if args.library_kit is not None:
                 # commercial kit definitions
                 kit_choices = {'phase': ['Sau3AI', 'MluCI'],
                                'arima': ['DpnII', 'HinfI']}

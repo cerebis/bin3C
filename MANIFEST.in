@@ -1,0 +1,3 @@
+graft workflows
+prune workflows/bin/pyvenn/.git
+recursive-exclude workflows *.pyc
