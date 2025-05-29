@@ -78,7 +78,11 @@ def write_clustering_output(contact_map: ContactMap, clustering: dict, **kwargs)
                       alpha=kwargs['plot_contrast'])
 
 
-def main() -> None:
+def setup_command_interface() -> argparse.ArgumentParser:
+    """
+    Set up the command line interface for users.
+    :return: ArgumentParser
+    """
 
     _defaults = {
         'min_reflen': 2500,
@@ -97,7 +101,8 @@ def main() -> None:
         'plot-contrast': 1e-4,
         'fdr-alpha': 1e-2,
         'markov-scale': 0.95,
-        'regularize': None
+        'regularize': None,
+        'revise_resolution': 0.8,
     }
 
     # options shared by all commands
@@ -277,20 +282,295 @@ def main() -> None:
                             default='greedy_modularity', help='Partitioning algorithm to apply')
     cmd_revise.add_argument('--only-new', default=False, action='store_true',
                             help='Return only the revised clusters')
+    cmd_revise.add_argument('--resolution', metavar='FLOAT', type=float,
+                            default=_defaults['revise_resolution'],
+                            help='Resolution parameter for repartitioning (default: %(default)s)')
     cmd_revise.add_argument('MAP', help='bin3C contact map')
     cmd_revise.add_argument('CLUSTERING', help='bin3C clustering object')
     cmd_revise.add_argument('TARGETS', metavar='TARGET_LIST',
                              help='Single column list of cluster names targeted for revision. (Example names: CL001, CL002)')
     cmd_revise.add_argument('OUTDIR', help='Output directory')
 
-    args = parser.parse_args()
+    return parser
+
+
+def setup_logging(args: argparse.Namespace) -> logging.Logger:
+    """
+    Configure logging for both file and console output.
+    :param args: parsed command line arguments
+    :return: logger
+    """
+    logging.captureWarnings(True)
+    logger = logging.getLogger('main')
+    root = logging.getLogger('')
+    root.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter(fmt='%(levelname)-8s | %(asctime)s | %(name)7s | %(message)s')
+
+    # Console handler
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG if args.verbose else logging.INFO)
+    ch.setFormatter(formatter)
+    root.addHandler(ch)
+
+    # File handler
+    log_path = args.log if args.log else os.path.join(args.OUTDIR, 'bin3C.log')
+    fh = logging.FileHandler(log_path, mode='a')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    root.addHandler(fh)
+
+    return logger
+
+
+def handle_mkmap(args: argparse.Namespace, logger: logging.Logger) -> None:
+    """
+    Handle the mkmap command for creating contact maps.
+    :param args:
+    :param logger:
+    """
+    if args.tip_size is not None:
+        logger.warning('[Experimental] Specifying tip-size enables independent tracking of the ends of contigs.')
+        if args.tip_size < 5000:
+            logger.warning('[Experimental] It is recommended to use tip sizes no smaller than 5kbp')
+        if args.tip_size > args.min_reflen:
+            msg = 'min-reflen cannot be smaller than the tip-size'
+            logger.error(f'[Experimental] {msg}')
+            raise ApplicationException(msg)
+
+    # Handle library kit enzyme selection
+    if args.library_kit is not None:
+        kit_choices = {'phase': ['Sau3AI', 'MluCI'],
+                      'arima': ['DpnII', 'HinfI']}
+        args.enzyme = kit_choices[args.library_kit]
+        logger.info(f'Library kit {args.library_kit} declares enzymes {args.enzyme}')
+
+    # Create contact map
+    contact_map = ContactMap(args.BAM, args.enzyme, args.FASTA, args.min_insert,
+                           min_mapq=args.min_mapq, min_len=args.min_reflen,
+                           min_sig=args.min_signal, min_extent=args.min_extent,
+                           max_edist=args.max_edist, min_alen=args.min_alen,
+                           bin_size=args.bin_size, tip_size=args.tip_size,
+                           no_duplicates=not args.keep_duplicates,
+                           precount=args.eta, threads=args.threads)
+
+    if contact_map.is_empty():
+        logger.info('Stopping as the map is empty')
+        sys.exit(1)
+
+    logger.info('Saving contact map instance')
+    save_object(os.path.join(args.OUTDIR, 'contact_map.p'), contact_map)
+
+
+def handle_combine(args: argparse.Namespace, logger: logging.Logger) -> None:
+    """
+    Handle the combine command for merging contact maps.
+    :param args:
+    :param logger:
+    """
+    cm_summed = None
+    for cm_file in args.MAP:
+        logger.info(f'Loading contact map: {cm_file}')
+        if cm_summed is None:
+            cm_summed = load_object(cm_file)
+        else:
+            cm_summed.append_map(load_object(cm_file))
+    logger.info('Saving combined map')
+    save_object(os.path.join(args.OUTDIR, 'combined_map.p'), cm_summed)
+
+
+def handle_cluster(args: argparse.Namespace, logger: logging.Logger) -> None:
+    """
+    Handle the cluster command for clustering contact maps.
+    :param args:
+    :param logger:
+    """
+    if not args.seed:
+        args.seed = make_random_seed()
+        logger.info(f'Generated random seed: {args.seed}')
+    else:
+        logger.info(f'User set random seed: {args.seed}')
+
+    logger.info(f'Loading existing contact map from: {args.MAP}')
+    contact_map = load_object(args.MAP)
+
+    if args.min_extent is not None:
+        contact_map.min_extent = args.min_extent
+
+    # in cases where a user supplies a value, we will need to redo the acceptance mask
+    # otherwise the mask will have been done with default values.
+    remask = False
+    if args.min_signal is not None:
+        contact_map.min_sig = args.min_signal
+        remask = True
+    if args.min_reflen is not None:
+        contact_map.min_len = args.min_reflen
+        remask = True
+
+    if remask:
+        contact_map.set_primary_acceptance_mask(min_sig=contact_map.min_sig,
+                                                min_len=contact_map.min_len,
+                                                update=True)
+
+    exclude_names = None
+    if args.exclude_from:
+        exclude_names = []
+        logger.info(f'Reading excluded ids from {args.exclude_from}')
+        for _nm in open(args.exclude_from, 'rt'):
+            _nm = _nm.strip()
+            if not _nm or _nm.startswith('#'):
+                continue
+            exclude_names.append(_nm)
+    if exclude_names:
+        logger.info(f'Reading excluded ids from {args.exclude_from}')
+
+    clustering = cluster_map(contact_map, seed=args.seed,
+                           work_dir=args.OUTDIR,
+                           n_iter=args.n_iter,
+                           norm_method=args.norm_method,
+                           exclude_names=exclude_names,
+                           from_extent=args.from_extent,
+                           fdr_alpha=args.fdr_alpha,
+                           use_entropy=args.use_entropy,
+                           gfa_file=args.gfa,
+                           markov_scale=args.markov_scale,
+                           regularize=args.regularize,
+                           vary_markov=args.vary_markov)
+
+    write_clustering_output(contact_map, clustering, **vars(args))
+
+
+def handle_revise(args: argparse.Namespace, logger: logging.Logger) -> None:
+    """
+    Handle the revise command for modifying existing clusters.
+    :param args:
+    :param logger:
+    """
+    logger.info(f'Loading contact map from: {args.MAP}')
+    contact_map = load_object(args.MAP)
+
+    logger.info(f'Loading clustering solution from: {args.CLUSTERING}')
+    clustering = load_object(args.CLUSTERING)
+
+    if args.min_extent is not None:
+        contact_map.min_extent = args.min_extent
+
+    import re
+    id_pattern = re.compile(r'CL(\d+)')
+    target_ids = []
+    logger.info(f'Reading target cluster names from {args.TARGETS}')
+    for _nm in open(args.TARGETS, 'rt'):
+        m = id_pattern.match(_nm)
+        if m is None:
+            raise ValueError(f'The cluster {_nm} was not of the form CL{{int}}. e.g. CL001, CL123')
+        target_ids.append(m.group(1))
+
+    if len(target_ids) == 0:
+        raise ApplicationException('The list of target clusters was empty')
+
+    target_ids = np.asarray(target_ids, dtype=np.int64) - 1
+    logger.info(f'Revising {len(target_ids)} clusters')
+
+    if args.algorithm == 'label_propagation':
+        logger.warning('Label propagation ignores the resolution option')
+        alg_args = None
+    else:
+        logger.debug(f'Repartitioning using resolution value: {args.resolution}')
+        alg_args = {'resolution': args.resolution}
+
+    revised = revise_clusters(target_ids, contact_map, clustering,
+                            algorithm_name=args.algorithm,
+                            from_extent=args.from_extent,
+                            norm_method=args.norm_method,
+                            fdr_alpha=args.fdr_alpha,
+                            only_new=args.only_new,
+                            alg_args=alg_args)
+
+    write_clustering_output(contact_map, revised, **vars(args))
+
+
+def handle_extract(args: argparse.Namespace, logger: logging.Logger) -> None:
+    """
+    Handle the extract command for extracting specific clusters.
+    :param args:
+    :param logger:
+    """
+    logger.info(f'Loading contact map from: {args.MAP}')
+    contact_map = load_object(args.MAP)
+
+    logger.info(f'Loading clustering solution from: {args.CLUSTERING}')
+    clustering = load_object(args.CLUSTERING)
+
+    cluster_ids = None if not args.CLUSTER_ID else np.asarray(args.CLUSTER_ID, dtype=np.int64) - 1
+    if cluster_ids is None:
+        logger.info('Extracting all clusters')
+    else:
+        logger.info(f'Extracting {len(cluster_ids)} clusters')
+
+    if args.format in ['plot', 'graph']:
+        contact_map.min_sig = 0
+        contact_map.min_len = 0
+        contact_map.min_extent = 0
+        contact_map.set_primary_acceptance_mask(min_sig=contact_map.min_sig,
+                                              min_len=contact_map.min_len,
+                                              update=True)
+        contact_map.prepare_seq_map(norm=True, bisto=True, norm_method=args.norm_method)
+
+    if args.use_extent and contact_map.extent_map is None:
+        logger.error('An extent map was not generated when creating the specified contact map')
+
+    if args.format == 'plot':
+        plot_clusters(contact_map,
+                     os.path.join(args.OUTDIR, f'extracted.{args.plot_format}'),
+                     clustering,
+                     max_image_size=args.max_image,
+                     min_extent=args.min_extent,
+                     ordered_only=False,
+                     permute=True,
+                     simple=not args.use_extent,
+                     cl_list=cluster_ids,
+                     norm_method=args.norm_method,
+                     show_sequences=args.show_sequences,
+                     alpha=args.plot_contrast)
+
+    elif args.format == 'graph':
+        g = to_graph(contact_map,
+                    norm=True,
+                    bisto=True,
+                    node_id_type='external',
+                    scale=False,
+                    clustering=clustering,
+                    cl_list=cluster_ids,
+                    norm_method=args.norm_method)
+        nx.write_graphml(g, os.path.join(args.OUTDIR, 'extracted.graphml'))
+
+    elif args.format == 'bam':
+        out_file, n_refs, n_pairs = extract_bam(contact_map,
+                                               clustering,
+                                               args.OUTDIR,
+                                               cluster_ids,
+                                               clobber=args.clobber,
+                                               threads=args.threads,
+                                               bam_file=args.bam,
+                                               version=version_stamp(False),
+                                               cmdline=reconstruct_cmdline())
+        logger.info(f'Output BAM {out_file} contains {n_refs:,} references and {n_pairs:,} pairs')
+
+    else:
+        raise ApplicationException(f'Unknown format option {args.format}')
+
+
+def main():
+
+    cli_parser = setup_command_interface()
+    args = cli_parser.parse_args()
 
     if args.version:
         print(version_stamp())
         sys.exit(0)
 
     if args.command is None:
-        parser.print_usage()
+        cli_parser.print_usage()
         sys.exit(0)
 
     try:
@@ -299,259 +579,27 @@ def main() -> None:
         print(f'Error: {ex}')
         sys.exit(1)
 
-    logging.captureWarnings(True)
-    logger = logging.getLogger('main')
-
-    # root log listens to everything
-    root = logging.getLogger('')
-    root.setLevel(logging.DEBUG)
-
-    # log message format
-    formatter = logging.Formatter(fmt='%(levelname)-8s | %(asctime)s | %(name)7s | %(message)s')
-
-    # Runtime console listens to INFO by default
-    ch = logging.StreamHandler()
-    if args.verbose:
-        ch.setLevel(logging.DEBUG)
-    else:
-        ch.setLevel(logging.INFO)
-    ch.setFormatter(formatter)
-    root.addHandler(ch)
-
-    # File log listens to all levels from root
-    if args.log is not None:
-        log_path = args.log
-    else:
-        log_path = os.path.join(args.OUTDIR, 'bin3C.log')
-    fh = logging.FileHandler(log_path, mode='a')
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(formatter)
-    root.addHandler(fh)
-
-    # Add some environmental details
+    # Setup logging
+    logger = setup_logging(args)
     logger.debug(version_stamp(False))
     logger.debug(sys.version.replace('\n', ' '))
     logger.debug(f'Command line: {reconstruct_cmdline()}')
 
+    # Command handling
     try:
+        command_handlers = {
+            'mkmap': handle_mkmap,
+            'combine': handle_combine,
+            'cluster': handle_cluster,
+            'revise': handle_revise,
+            'extract': handle_extract
+        }
 
-        if args.command == 'mkmap':
-
-            if args.tip_size is not None:
-                logger.warning('[Experimental] Specifying tip-size enables '
-                               'independent tracking of the ends of contigs.')
-                if args.tip_size < 5000:
-                    logger.warning('[Experimental] It is recommended to use tip sizes no smaller than 5kbp')
-                if args.tip_size > args.min_reflen:
-                    msg = 'min-reflen cannot be smaller than the tip-size'
-                    logger.error(f'[Experimental] {msg}')
-                    raise ApplicationException(msg)
-
-            # check if the user has employed the library kit option to declare enzymes
-            if args.library_kit is not None:
-                # commercial kit definitions
-                kit_choices = {'phase': ['Sau3AI', 'MluCI'],
-                               'arima': ['DpnII', 'HinfI']}
-                args.enzyme = kit_choices[args.library_kit]
-                logger.info(f'Library kit {args.library_kit} declares enzymes {args.enzyme}')
-
-            # Create a contact map for analysis
-            contact_map = ContactMap(args.BAM,
-                            args.enzyme,
-                            args.FASTA,
-                            args.min_insert,
-                            min_mapq=args.min_mapq,
-                            min_len=args.min_reflen,
-                            min_sig=args.min_signal,
-                            min_extent=args.min_extent,
-                            max_edist=args.max_edist,
-                            min_alen=args.min_alen,
-                            bin_size=args.bin_size,
-                            tip_size=args.tip_size,
-                            no_duplicates=not args.keep_duplicates,
-                            precount=args.eta,
-                            threads=args.threads)
-
-            if contact_map.is_empty():
-                logger.info('Stopping as the map is empty')
-                sys.exit(1)
-
-            logger.info('Saving contact map instance')
-            save_object(os.path.join(args.OUTDIR, 'contact_map.p'), contact_map)
-
-        elif args.command == 'combine':
-            cm_summed = None
-            for cm_file in args.MAP:
-                logger.info(f'Loading contact map: {cm_file}')
-                if cm_summed is None:
-                    cm_summed = load_object(cm_file)
-                else:
-                    cm_summed.append_map(load_object(cm_file))
-            logger.info('Saving combined map')
-            save_object(os.path.join(args.OUTDIR, 'combined_map.p'), cm_summed)
-
-        elif args.command == 'cluster':
-
-            if not args.seed:
-                args.seed = make_random_seed()
-                logger.info(f'Generated random seed: {args.seed}')
-            else:
-                logger.info(f'User set random seed: {args.seed}')
-
-            # Load a pre-existing serialized contact map
-            logger.info(f'Loading existing contact map from: {args.MAP}')
-            contact_map = load_object(args.MAP)
-
-            if args.min_extent is not None:
-                contact_map.min_extent = args.min_extent
-
-            # in cases where a user supplies a value, we will need to redo the acceptance mask
-            # otherwise the mask will have been done with default values.
-            remask = False
-            if args.min_signal is not None:
-                contact_map.min_sig = args.min_signal
-                remask = True
-            if args.min_reflen is not None:
-                contact_map.min_len = args.min_reflen
-                remask = True
-
-            if remask:
-                contact_map.set_primary_acceptance_mask(min_sig=contact_map.min_sig,
-                                                        min_len=contact_map.min_len,
-                                                        update=True)
-
-            exclude_names = None
-            if args.exclude_from:
-                exclude_names = []
-                logger.info(f'Reading excluded ids from {args.exclude_from}')
-                for _nm in open(args.exclude_from, 'rt'):
-                    _nm = _nm.strip()
-                    if not _nm or _nm.startswith('#'):
-                        continue
-                    exclude_names.append(_nm)
-
-            # cluster the entire map
-            clustering = cluster_map(contact_map,
-                                      seed=args.seed,
-                                      work_dir=args.OUTDIR,
-                                      n_iter=args.n_iter,
-                                      norm_method=args.norm_method,
-                                      exclude_names=exclude_names,
-                                      from_extent=args.from_extent,
-                                      fdr_alpha=args.fdr_alpha,
-                                      use_entropy=args.use_entropy,
-                                      gfa_file=args.gfa,
-                                      markov_scale=args.markov_scale,
-                                      regularize=args.regularize,
-                                      vary_markov=args.vary_markov)
-
-            write_clustering_output(contact_map, clustering, **vars(args))
-
-        elif args.command == 'revise':
-
-            logger.info(f'Loading contact map from: {args.MAP}')
-            contact_map = load_object(args.MAP)
-
-            logger.info(f'Loading clustering solution from: {args.CLUSTERING}')
-            clustering = load_object(args.CLUSTERING)
-
-            if args.min_extent is not None:
-                contact_map.min_extent = args.min_extent
-
-            import re
-            id_pattern = re.compile(r'CL(\d+)')
-            target_ids = []
-            logger.info(f'Reading target cluster names from {args.TARGETS}')
-            for _nm in open(args.TARGETS, 'rt'):
-                m = id_pattern.match(_nm)
-                if m is None:
-                    raise ValueError(f'The cluster {_nm} was not of the form CL{{int}}. e.g. CL001, CL123')
-                target_ids.append(m.group(1))
-
-            if len(target_ids) == 0:
-                raise ApplicationException('The list of target clusters was empty')
-
-            # convert to 0-based integers
-            target_ids = np.asarray(target_ids, dtype=np.int64) - 1
-            logger.info(f'Revising {len(target_ids)} clusters')
-
-            revised = revise_clusters(target_ids, contact_map, clustering, algorithm_name=args.algorithm,
-                                      from_extent=args.from_extent, norm_method=args.norm_method,
-                                      fdr_alpha=args.fdr_alpha, only_new=args.only_new)
-
-            write_clustering_output(contact_map, revised, **vars(args))
-
-        elif args.command == 'extract':
-
-            logger.info(f'Loading contact map from: {args.MAP}')
-            contact_map = load_object(args.MAP)
-
-            logger.info(f'Loading clustering solution from: {args.CLUSTERING}')
-            clustering = load_object(args.CLUSTERING)
-
-            # Convert public string ids to internal 0-based integer ids
-            if not args.CLUSTER_ID:
-                cluster_ids = None
-                logger.info('Extracting all clusters')
-            else:
-                cluster_ids = np.asarray(args.CLUSTER_ID, dtype=np.int64) - 1
-                logger.info(f'Extracting {len(cluster_ids)} clusters')
-
-            if args.format in ['plot', 'graph']:
-                # ensure that selected clusters are not masked
-                contact_map.min_sig = 0
-                contact_map.min_len = 0
-                contact_map.min_extent = 0
-                contact_map.set_primary_acceptance_mask(min_sig=contact_map.min_sig, min_len=contact_map.min_len, update=True)
-                contact_map.prepare_seq_map(norm=True, bisto=True, norm_method=args.norm_method)
-
-            if args.format == 'plot':
-
-                if args.use_extent and contact_map.extent_map is None:
-                    logger.error('An extent map was not generated when creating the specified contact map')
-
-                plot_clusters(contact_map,
-                              os.path.join(args.OUTDIR, f'extracted.{args.plot_format}'),
-                              clustering,
-                              max_image_size=args.max_image,
-                              min_extent=args.min_extent,
-                              ordered_only=False,
-                              permute=True,
-                              simple=not args.use_extent,
-                              cl_list=cluster_ids,
-                              norm_method=args.norm_method,
-                              show_sequences=args.show_sequences,
-                              alpha=args.plot_contrast)
-
-            elif args.format == 'graph':
-
-                g = to_graph(contact_map,
-                             norm=True,
-                             bisto=True,
-                             node_id_type='external',
-                             scale=False,
-                             clustering=clustering,
-                             cl_list=cluster_ids,
-                             norm_method=args.norm_method)
-
-                nx.write_graphml(g, os.path.join(args.OUTDIR, 'extracted.graphml'))
-
-            elif args.format == 'bam':
-
-                out_file, n_refs, n_pairs = extract_bam(contact_map,
-                                                        clustering,
-                                                        args.OUTDIR,
-                                                        cluster_ids,
-                                                        clobber=args.clobber,
-                                                        threads=args.threads,
-                                                        bam_file=args.bam,
-                                                        version=version_stamp(False),
-                                                        cmdline=reconstruct_cmdline())
-
-                logger.info(f'Output BAM {out_file} contains {n_refs:,} references and {n_pairs:,} pairs')
-
-            else:
-                raise ApplicationException(f'Unknown format option {args.format}')
+        try:
+            handler = command_handlers[args.command]
+            handler(args, logger)
+        except KeyError:
+            raise ApplicationException(f'Unknown command: {args.command}')
 
     except ApplicationException as ex:
         logger.error(ex)
