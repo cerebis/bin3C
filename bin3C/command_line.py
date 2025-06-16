@@ -1,17 +1,29 @@
-from proxigenomics_toolkit.contact_map import (ContactMap, cluster_report, plot_clusters, cluster_map, extract_bam,
-                                               revise_clusters, to_graph, write_fasta, write_mcl, write_report)
-from proxigenomics_toolkit.exceptions import ApplicationException
-from proxigenomics_toolkit.io_utils import load_object, save_object
-from proxigenomics_toolkit.misc_utils import make_random_seed, make_dir
-from bin3C._version import version_stamp
-
-import numpy as np
-import networkx as nx
 import argparse
 import logging
 import os
 import sys
 from shlex import quote
+from typing import Type
+
+import networkx as nx
+import numpy as np
+from proxigenomics_toolkit.contact_map import (
+    ContactMap,
+    cluster_map,
+    cluster_report,
+    extract_bam,
+    plot_clusters,
+    revise_clusters,
+    to_graph,
+    write_fasta,
+    write_mcl,
+    write_report,
+)
+from proxigenomics_toolkit.exceptions import ApplicationException
+from proxigenomics_toolkit.io_utils import load_object, save_object
+from proxigenomics_toolkit.misc_utils import make_dir, make_random_seed
+
+from bin3C._version import version_stamp
 
 
 def reconstruct_cmdline() -> str:
@@ -23,7 +35,7 @@ def reconstruct_cmdline() -> str:
     return ' '.join(map(quote, sys.argv))
 
 
-def required_length(n_min: int):
+def required_length(n_min: int) -> Type[argparse.Action]:
     class RequiredLength(argparse.Action):
         def __call__(self, parser, args, values, option_string=None):
             if len(values) < n_min:

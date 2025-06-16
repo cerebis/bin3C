@@ -1,8 +1,9 @@
-from mzd.splitters import simple_splitter
-from mzd.exceptions import ApplicationException
 import logging
-import sys
 import os
+import sys
+
+from proxigenomics_toolkit.exceptions import ApplicationException
+from proxigenomics_toolkit.seq_utils import simple_splitter
 
 __version__ = '0.1.1'
 

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools==80.9.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -25,6 +25,8 @@ classifiers = [
 
 dependencies = [
     "proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@mldev",
+    "pypalettes",
+    "toml",
 ]
 
 [project.urls]
@@ -36,3 +38,45 @@ bin3C = "bin3C.command_line:main"
 
 [tool.setuptools.packages]
 find = {}
+
+[dependency-groups]
+docs = ["sphinx"]
+test = ["pytest == 8.3.5"]
+lint = ["mypy == 1.16.0", "ruff == 0.11.12"]
+dev = [
+    {include-group = "test"},
+    {include-group = "lint"},
+    {include-group = "docs"},
+]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "F",   # pyflakes
+    "E",   # pycodestyle
+    "I",   # isort
+    "ANN", # flake8 type annotations
+    "RUF", # ruff-specific rules
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

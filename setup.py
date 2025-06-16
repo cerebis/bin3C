@@ -28,7 +28,11 @@ setuptools.setup(
     url='https://github.com/cerebis/bin3C',
     license='GNU Affero General Public License v3',
     include_package_data=True,
-    install_requires=['proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@mldev#egg=proxigenomics_toolkit'],
+    install_requires=[
+        'proxigenomics_toolkit @ git+https://github.com/cerebis/proxigenomics_toolkit@mldev#egg=proxigenomics_toolkit',
+        'pypalettes',
+        'toml',
+    ],
     classifiers=[
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.11',
