@@ -16,4 +16,4 @@ def version_stamp(full: bool=True) -> str:
     if full:
         return f'bin3C {__version__}\n{__copyright__}'
     else:
-        return 'bin3C {__version__}'
+        return f'bin3C {__version__}'
