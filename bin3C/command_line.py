@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 from shlex import quote
-from typing import Type
+from typing import Collection, Optional, Type, TypedDict, Unpack
 
 import networkx as nx
 import numpy as np
@@ -37,15 +37,35 @@ def reconstruct_cmdline() -> str:
 
 def required_length(n_min: int) -> Type[argparse.Action]:
     class RequiredLength(argparse.Action):
-        def __call__(self, parser, args, values, option_string=None):
+        def __call__(self,
+                     parser: argparse.ArgumentParser,
+                     args: argparse.Namespace,
+                     values: Collection,
+                     option_string: Optional[str]=None) -> None:
             if len(values) < n_min:
                 msg = f'argument "{self.dest}" requires at least {n_min} arguments'
                 raise argparse.ArgumentTypeError(msg)
             setattr(args, self.dest, values)
     return RequiredLength
 
+class CommandOptions(TypedDict):
+    """
+    Optional arguments
+    """
+    OUTDIR: str
+    assembler: str
+    coverage: str
+    fasta: str
+    max_image: int
+    no_fasta: bool
+    no_plot: bool
+    no_report: bool
+    only_large: bool
+    plot_contrast: float
+    plot_format: str
 
-def write_clustering_output(contact_map: ContactMap, clustering: dict, **kwargs) -> None:
+
+def write_clustering_output(contact_map: ContactMap, clustering: dict, **kwargs: Unpack[CommandOptions]) -> None:
     """
     Write the output files for a clustering solution.
     :param contact_map: relevant contact map
@@ -153,7 +173,8 @@ def setup_command_interface() -> argparse.ArgumentParser:
     report_parser.add_argument('--only-large', default=False, action='store_true',
                                help='Only write FASTA for clusters longer than min_extent')
     report_parser.add_argument('--coverage', metavar='PATH', default=None,
-                                 help='Per-sequence depth of coverage data format: "seq_id,value" (default: %(default)s)')
+                                 help='Per-sequence depth of coverage data format: '
+                                      '"seq_id,value" (default: %(default)s)')
     report_parser.add_argument('--fasta', metavar='PATH', default=None,
                                  help='Alternative location of source FASTA from that supplied during mkmap')
     report_parser.add_argument('--assembler', choices=['generic', 'spades', 'megahit', 'flye'], default='generic',
@@ -300,7 +321,8 @@ def setup_command_interface() -> argparse.ArgumentParser:
     cmd_revise.add_argument('MAP', help='bin3C contact map')
     cmd_revise.add_argument('CLUSTERING', help='bin3C clustering object')
     cmd_revise.add_argument('TARGETS', metavar='TARGET_LIST',
-                             help='Single column list of cluster names targeted for revision. (Example names: CL001, CL002)')
+                             help='Single column list of cluster names targeted for revision. '
+                                  '(Example names: CL001, CL002)')
     cmd_revise.add_argument('OUTDIR', help='Output directory')
 
     return parser
@@ -572,7 +594,7 @@ def handle_extract(args: argparse.Namespace, logger: logging.Logger) -> None:
         raise ApplicationException(f'Unknown format option {args.format}')
 
 
-def main():
+def main() -> None:
 
     cli_parser = setup_command_interface()
     args = cli_parser.parse_args()

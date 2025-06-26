@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import argparse
-import pandas as pd
 import sys
+
+import pandas as pd
 
 parser = argparse.ArgumentParser('Collate Aragorn batch output for tRNA counts and write TOML to STDOUT')
 parser.add_argument('--name', type=str, help='Name of analysed sequence')

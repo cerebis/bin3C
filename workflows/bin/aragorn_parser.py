@@ -2,8 +2,9 @@
 import argparse
 import re
 import sys
-import toml
 from collections import defaultdict
+
+import toml
 
 parser = argparse.ArgumentParser('Collate Aragorn batch output for tRNA counts and write TOML to STDOUT')
 parser.add_argument('-T', '--total-only', action='store_true', default=False,

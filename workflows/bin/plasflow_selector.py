@@ -1,7 +1,8 @@
 #!/bin/env python
-import pandas as pd
-import re
 import argparse
+import re
+
+import pandas as pd
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--threshold', type=float, help='Probability threshold', default=0.9)
@@ -26,7 +27,7 @@ for index, row in df.iterrows():
         chromosomes_sum = row[[col for col in df.columns if re.match(r'^chromosom.*', col)]].sum()
 
         my_regex = r".*" + re.escape(tax_name) + r""
-        taxnames_sum = row[[col for col in df.columns if re.match(my_regex, col)]].sum()
+        taxon_names_count = row[[col for col in df.columns if re.match(my_regex, col)]].sum()
 
         if plasmids_sum > args.threshold:
             assignment = 'plasmid.unclassified'
@@ -34,9 +35,9 @@ for index, row in df.iterrows():
         elif chromosomes_sum > args.threshold:
             assignment =  'chromosome.unclassified'
             score = chromosomes_sum
-        elif taxnames_sum > args.threshold:
+        elif taxon_names_count > args.threshold:
             assignment =  'unclassified.{}'.format(tax_name)
-            score = taxnames_sum
+            score = taxon_names_count
         else:
             assignment =  'unclassified.unclassified'
             score = None

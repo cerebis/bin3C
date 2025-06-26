@@ -1,34 +1,38 @@
 #!/bin/env python
-import pandas as pd
-import numpy as np
-import Bio.SeqIO as SeqIO
-from pyvenn import venn
-import os
-import matplotlib.pyplot as plt
 import errno
+import os
+from typing import List, Tuple
 
+import Bio.Seq
+import Bio.SeqIO as SeqIO
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from pandas.errors import EmptyDataError
+from pyvenn import venn
 
 try:
     from Bio.SeqUtils import gc_fraction
-    def GC(sequence):
+    def GC(sequence: Bio.Seq.Seq) -> float:
         return 100 * gc_fraction(sequence, ambiguous="ignore")
 except ImportError:
     # Older versions have this:
     from Bio.SeqUtils import GC
 
 
-def add_classifier(df, col_name, hit_index):
+def add_classifier(df: pd.DataFrame, col_name: str, hit_index: int) -> None:
     df[col_name] = False
     df.loc[hit_index, col_name] = True
 
 
-def test_existence(fn):
+def test_existence(fn: str) -> None:
     if not os.path.exists(fn):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), fn)
 
 
-def plot_venn(sets, names):
+def plot_venn(sets: List[set], names: List[str]) -> Tuple[Figure, Axes]:
     assert len(sets) == len(names), 'sets and names must be the same length'
 
     if len(sets) == 2:
@@ -52,10 +56,21 @@ def plot_venn(sets, names):
     return fig, ax
 
 
-def combine_results(out_dir, contig_fasta, circ_file, cat_file,
-                    virsort_file, vibrant_file, dvf_file, marvel_file, phamer_file,
-                    plasflow_file, plasclass_file, plasforest_file, plasmidhunter_file,
-                    no_partial=True, silent=False):
+def combine_results(out_dir: str,
+                    contig_fasta: str,
+                    circ_file: str,
+                    cat_file: str,
+                    virsort_file: str,
+                    vibrant_file: str,
+                    dvf_file: str,
+                    marvel_file: str,
+                    phamer_file: str,
+                    plas_flow_file: str,
+                    plas_class_file: str,
+                    plas_forest_file: str,
+                    plasmidhunter_file: str,
+                    no_partial: bool=True,
+                    silent: bool=False) -> pd.DataFrame:
 
     # check for input and output existence
     if not os.path.exists(out_dir):
@@ -63,7 +78,7 @@ def combine_results(out_dir, contig_fasta, circ_file, cat_file,
         print(f'Created output directory: {out_dir}')
 
     for fn in [contig_fasta, virsort_file, vibrant_file, dvf_file, marvel_file, phamer_file,
-               plasflow_file, plasclass_file, plasforest_file]:
+               plas_flow_file, plas_class_file, plas_forest_file]:
         assert os.path.exists(fn), f'Input file {fn} does not exist'
 
     base_name = os.path.splitext(os.path.basename(contig_fasta))[0]
@@ -82,7 +97,8 @@ def combine_results(out_dir, contig_fasta, circ_file, cat_file,
         cat = pd.read_csv(cat_file, sep='\t')
         cat.rename(columns={'# contig': 'name'}, inplace=True)
         cat.set_index('name', inplace=True)
-        cat[['domain','phylum','class','order','family','genus','species']] = cat.lineage.str.split(';', expand=True).iloc[:,1:]
+        cat[['domain','phylum','class','order','family','genus','species']] \
+            = cat.lineage.str.split(';', expand=True).iloc[:,1:]
         #        cat['superkingdom.1'] = cat.superkingdom.str.split(':', expand=True)[0]
         #        cat['phylum.1'] = cat.phylum.str.split(':', expand=True)[0]
         all_seq = all_seq.join(cat, how='left')
@@ -137,7 +153,7 @@ def combine_results(out_dir, contig_fasta, circ_file, cat_file,
             if not silent:
                 print('vibrant: dropped {} fragments'.format(n_frag))
     except EmptyDataError:
-        # handle case when vibrant has to predictions (0-byte file)
+        # handle the case when vibrant has to predictions (0-byte file)
         vib = pd.DataFrame({'name': [], 'vibrant_partial': []}, dtype=str).set_index('name')
 
     add_classifier(all_seq, 'vibrant', vib.index)
@@ -182,23 +198,41 @@ def combine_results(out_dir, contig_fasta, circ_file, cat_file,
     # matrix representation
     if not silent:
         df_2way = np.zeros((5,5), dtype=np.int32)
-        df_2way[np.triu_indices(5,k=1)] = [len(ix1),len(ix2),len(ix3),len(ix4),len(ix5),len(ix6),len(ix7),len(ix8),len(ix9),len(ix10)]
+        df_2way[np.triu_indices(5,k=1)] = [len(ix1),len(ix2),
+                                              len(ix3),len(ix4),
+                                              len(ix5),len(ix6),
+                                              len(ix7),len(ix8),
+                                              len(ix9),len(ix10)]
         df_2way[np.diag_indices(5)] = [len(virsort), len(dvf), len(vib), len(marv), len(phamer)]
-        df_2way = pd.DataFrame(df_2way, columns=['vs2', 'dvf', 'vib', 'marv', 'phamer'], index=['vs2', 'dvf', 'vib', 'marv', 'phamer'])
+        df_2way = pd.DataFrame(df_2way,
+                               columns=['vs2', 'dvf', 'vib', 'marv', 'phamer'],
+                               index=['vs2', 'dvf', 'vib', 'marv', 'phamer'])
         print('Two-way consensus matrix')
         print(df_2way)
 
 
     ax = plt.subplot(111)
-    fig, ax = plot_venn([set(virsort.index), set(dvf.index), set(marv.index), set(vib.index), set(phamer.index)],
-                        ['virsorter', 'deepvirfinder', 'marvel', 'vibrant', 'phamer'])
+    fig, ax = plot_venn([set(virsort.index),
+                              set(dvf.index),
+                              set(marv.index),
+                              set(vib.index),
+                              set(phamer.index)],
+                        ['virsorter',
+                                'deepvirfinder',
+                                'marvel',
+                                'vibrant',
+                                'phamer'])
     fig = ax.figure
     fig.set_figwidth(10)
     fig.set_figheight(10)
     fig.savefig(os.path.join(out_dir, f'{base_name}_virus-venn.svg'), bbox_inches='tight')
     plt.close()
 
-    all_seq['virus_hit_rank'] = all_seq.loc[:, ['virsorter', 'deepvirfinder', 'vibrant', 'marvel', 'phamer']].sum(axis=1)
+    all_seq['virus_hit_rank'] = all_seq.loc[:, ['virsorter',
+                                                'deepvirfinder',
+                                                'vibrant',
+                                                'marvel',
+                                                'phamer']].sum(axis=1)
     vir_2way = all_seq.query('virus_hit_rank>=2')
     if not silent:
         print('{:,} 2-way consensus virus identifications\n'.format(len(vir_2way)))
@@ -208,68 +242,79 @@ def combine_results(out_dir, contig_fasta, circ_file, cat_file,
 
     # PLASMID results
 
-    plasflow = pd.read_csv(plasflow_file, sep='\t', na_values='None').rename(columns={'contig': 'name'})
-    plasflow.query('score>=0.9 and classification.str.startswith("plasmid")', engine='python', inplace=True)
-    plasflow.set_index('name', inplace=True)
-    add_classifier(all_seq, 'plasflow', plasflow.index)
+    plas_flow = pd.read_csv(plas_flow_file, sep='\t', na_values='None').rename(columns={'contig': 'name'})
+    plas_flow.query('score>=0.9 and classification.str.startswith("plasmid")', engine='python', inplace=True)
+    plas_flow.set_index('name', inplace=True)
+    add_classifier(all_seq, 'plas_flow', plas_flow.index)
     if not silent:
-        print('{:,} plasflow predictions'.format(len(plasflow)))
+        print('{:,} plas_flow predictions'.format(len(plas_flow)))
 
-    plasclass = pd.read_csv(plasclass_file, sep='\t', names=['contig_id', 'pc_prob'])
-    plasclass.query('pc_prob>=0.9', inplace=True)
-    plasclass.set_index('contig_id', inplace=True)
-    add_classifier(all_seq, 'plasclass', plasclass.index)
+    plas_class = pd.read_csv(plas_class_file, sep='\t', names=['contig_id', 'pc_prob'])
+    plas_class.query('pc_prob>=0.9', inplace=True)
+    plas_class.set_index('contig_id', inplace=True)
+    add_classifier(all_seq, 'plas_class', plas_class.index)
     if not silent:
-        print('{:,} plasclass predictions'.format(len(plasclass)))
+        print('{:,} plas_class predictions'.format(len(plas_class)))
 
-    plasforest = pd.read_csv(plasforest_file, sep=',').rename(columns={'ID': 'name'})
-    plasforest.query('Prediction == "Plasmid"', inplace=True)
-    plasforest.set_index('name', inplace=True)
-    add_classifier(all_seq, 'plasforest', plasforest.index)
+    plas_forest = pd.read_csv(plas_forest_file, sep=',').rename(columns={'ID': 'name'})
+    plas_forest.query('Prediction == "Plasmid"', inplace=True)
+    plas_forest.set_index('name', inplace=True)
+    add_classifier(all_seq, 'plas_forest', plas_forest.index)
     if not silent:
-        print('{:,} plasforest predictions'.format(len(plasforest)))
+        print('{:,} plas_forest predictions'.format(len(plas_forest)))
 
-    plashunt = pd.read_csv(plasmidhunter_file, sep='\t').rename(columns={'Unnamed: 0': 'seq',
-                                                                         'Prediction (0: chromosome, 1: plasmid)': 'Pred'})
-    plashunt.set_index('seq', inplace=True)
-    plashunt.query('Pred == 1', inplace=True)
-    add_classifier(all_seq, 'plasmidhunter', plashunt.index)
+    plas_hunter = (pd.read_csv(plasmidhunter_file, sep='\t')
+                .rename(columns={'Unnamed: 0': 'seq',
+                                 'Prediction (0: chromosome, 1: plasmid)': 'Pred'}))
+    plas_hunter.set_index('seq', inplace=True)
+    plas_hunter.query('Pred == 1', inplace=True)
+    add_classifier(all_seq, 'plasmidhunter', plas_hunter.index)
     if not silent:
-        print('{:,} plasmidhunter predictions'.format(len(plashunt)))
+        print('{:,} plasmidhunter predictions'.format(len(plas_hunter)))
 
     # create sets of contig ids for each 2-way consensus
-    ix1 = set(plasflow.join(plasclass, how='inner').index)
-    ix2 = set(plasflow.join(plasforest, how='inner').index)
-    ix3 = set(plasflow.join(plashunt, how='inner').index)
-    ix4 = set(plasclass.join(plasforest, how='inner').index)
-    ix5 = set(plasclass.join(plashunt, how='inner').index)
-    ix6 = set(plasforest.join(plashunt, how='inner').index)
+    ix1 = set(plas_flow.join(plas_class, how='inner').index)
+    ix2 = set(plas_flow.join(plas_forest, how='inner').index)
+    ix3 = set(plas_flow.join(plas_hunter, how='inner').index)
+    ix4 = set(plas_class.join(plas_forest, how='inner').index)
+    ix5 = set(plas_class.join(plas_hunter, how='inner').index)
+    ix6 = set(plas_forest.join(plas_hunter, how='inner').index)
 
     # matrix representation
     if not silent:
         df_2way = np.zeros((4,4), dtype=np.int32)
         df_2way[np.triu_indices(4,k=1)] = [len(ix1),len(ix2),len(ix3),len(ix4),len(ix5),len(ix6)]
-        df_2way[np.diag_indices(4)] = [len(plasflow), len(plasclass), len(plasforest), len(plashunt)]
-        df_2way = pd.DataFrame(df_2way, columns=['pflw', 'pcls', 'pfor', 'phnt'], index=['pflw', 'pcls', 'pfor', 'phnt'])
+        df_2way[np.diag_indices(4)] = [len(plas_flow), len(plas_class), len(plas_forest), len(plas_hunter)]
+        df_2way = pd.DataFrame(df_2way,
+                               columns=['pflw', 'pcls', 'pfor', 'phnt'],
+                               index=['pflw', 'pcls', 'pfor', 'phnt'])
         print('Two-way consensus matrix')
         print(df_2way)
 
     ax = plt.subplot(111)
-    fig, ax = plot_venn([set(plasflow.index), set(plasclass.index), set(plasforest.index), set(plashunt.index)],
-                        ['plasflow', 'plasclass', 'plasforest', 'plasmidhunter'])
+    fig, ax = plot_venn([set(plas_flow.index),
+                              set(plas_class.index),
+                              set(plas_forest.index),
+                              set(plas_hunter.index)],
+                        ['plas_flow', 'plas_class', 'plas_forest', 'plasmidhunter'])
     fig = ax.figure
     fig.set_figwidth(10)
     fig.set_figheight(10)
     fig.savefig(os.path.join(out_dir, f'{base_name}_plasmid-venn.svg'), bbox_inches='tight')
     plt.close()
 
-    all_seq['plasmid_hit_rank'] = all_seq.loc[:, ['plasflow', 'plasclass', 'plasforest', 'plasmidhunter']].sum(axis=1)
+    all_seq['plasmid_hit_rank'] = all_seq.loc[:, ['plas_flow',
+                                                  'plas_class',
+                                                  'plas_forest',
+                                                  'plasmidhunter']].sum(axis=1)
     pls_2way = all_seq.query('plasmid_hit_rank>=2')
     if not silent:
         print('{:,} 2-way consensus plasmid identifications'.format(len(pls_2way)))
 
     pls_2way.to_csv(os.path.join(out_dir, f'{base_name}_plasmid_2way.csv'))
-    pls_2way.reset_index().name.to_csv(os.path.join(out_dir, f'{base_name}_plasmid_2way.ids'), index=False, header=False)
+    pls_2way.reset_index().name.to_csv(os.path.join(out_dir, f'{base_name}_plasmid_2way.ids'),
+                                       index=False,
+                                       header=False)
 
     # OVERALL results
 
@@ -314,9 +359,9 @@ if __name__ == '__main__':
     parser.add_argument('dvf_file', help='DeepVirFinder output file')
     parser.add_argument('marvel_file', help='MARVEL output file')
     parser.add_argument('phamer_file', help='PhaMer output file')
-    parser.add_argument('plasflow_file', help='PlasFlow output file')
-    parser.add_argument('plasclass_file', help='PlasClass output file')
-    parser.add_argument('plasforest_file', help='PlasForest output file')
+    parser.add_argument('plas_flow_file', help='PlasFlow output file')
+    parser.add_argument('plas_class_file', help='PlasClass output file')
+    parser.add_argument('plas_forest_file', help='PlasForest output file')
     parser.add_argument('plasmidhunter_file', help='PlasmidHunter output file')
     parser.add_argument('--no_partial', action='store_true', help='Ignore partial predictions')
     parser.add_argument('--silent', action='store_true', help='Suppress output')
@@ -324,5 +369,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     combine_results(args.out_dir, args.contig_fasta, args.circ_file, args.cat_file,
                     args.virsort_file, args.vibrant_file, args.dvf_file, args.marvel_file, args.phamer_file,
-                    args.plasflow_file, args.plasclass_file, args.plasforest_file, args.plasmidhunter_file,
+                    args.plas_flow_file, args.plas_class_file, args.plas_forest_file, args.plasmidhunter_file,
                     no_partial=args.no_partial, silent=args.silent)

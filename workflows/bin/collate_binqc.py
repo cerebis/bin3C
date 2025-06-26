@@ -1,20 +1,21 @@
 #!/usr/bin/env python
 import os
-import pandas as pd
 import re
 from collections import defaultdict
-from plotnine import *
-from pypalettes import load_cmap
+from typing import Dict
 
+import pandas as pd
+from plotnine import aes, element_blank, geom_bar, ggplot, labs, scale_fill_manual, theme, theme_bw
+from pypalettes import load_cmap
 
 # point of brittle failure
 QC_METHODS = ['CheckMv1', 'CheckMv2', 'CoCoPye']
 
 
-def stat_larger(df, min_completeness=50, max_contamination=500):
+def stat_larger(df: pd.DataFrame, min_completeness: int=50, max_contamination: int=500) -> pd.DataFrame:
     return df.query('Completeness >= @min_completeness and Contamination <= @max_contamination')
 
-def read_gtdb(fname, drop_dupes=False):
+def read_gtdb(fname: str, drop_dupes: bool=False) -> pd.DataFrame:
     df = pd.read_csv(fname, sep='\t') \
         .rename(columns={'# bin': 'Name', 'lineage scores (f: 0.30)': 'lineage_scores'})
     if drop_dupes:
@@ -22,14 +23,14 @@ def read_gtdb(fname, drop_dupes=False):
     df['Name'] = df.Name.str.split('.', expand=True)[0]
     return df
 
-def count_tRNA(aragorn_file):
+def count_tRNA(aragorn_file: str) -> Dict[str, int]:
     """
     Count tRNA genes in an Aragorn output file.
 
-    Tabulate the number of copies of each tRNA gene type. Return the total number of
+    Tabulate the number of copies for each tRNA gene type. Return the total number of
     types detected by Aragorn.
-    :param aragorn_file:
-    :return: dict reporting the total number of tRNA gene types (tRNA-[3let]) and the number of copies of each type
+    :param aragorn_file: Input Aragorn output file.
+    :return: Dict reporting the total number of tRNA gene types (tRNA-[3let]) and the number of copies for each type.
     """
     skip_pattern = re.compile(r'[0-9]+ genes found')
     trna_pattern = re.compile(r'^[0-9]+\s+(tRNA-[a-zA-Z]+)\s+.*$')
@@ -47,15 +48,15 @@ def count_tRNA(aragorn_file):
     return {'total': len(trna_counts), 'copies': trna_counts}
 
 
-def count_rRNA(barrnap_file):
+def count_rRNA(barrnap_file: str) -> pd.Series:
     """
     Count rRNA genes in a Barrnap output file.
 
-    The expectation is that we are analysing prokaryotes and
+    The expectation is that we are analyzing prokaryotes and
     therefore only 5S, 16S and 23S are of interest, however Archaeal and Eukaryotic rRNAs are also included.
 
     :param barrnap_file:
-    :return: Series with counts of each type of rRNA gene
+    :return: Series with counts for each type of rRNA gene
     """
     df = pd.read_csv(barrnap_file, sep='\t', comment='#', header=None)
     df = df.query('not @df[8].str.contains("partial")')[8].str.extract(r'Name=(\w+)')
@@ -63,9 +64,9 @@ def count_rRNA(barrnap_file):
     return pd.Categorical(df.gene, categories=['5S_rRNA', '16S_rRNA', '23S_rRNA',
                                                '5_8S_rRNA', '12S_rRNA', '18S_rRNA', '28S_rRNA']).value_counts()
 
-def assign_mimag_qualities(df):
+def assign_mimag_qualities(df: pd.DataFrame) -> None:
 
-    def select_quality_label(row, method):
+    def select_quality_label(row: pd.Series, method: str) -> str:
 
         # forced to sort column index each row to suppress a warning.
         #   sorting the parent table seems to have no impact despite too
@@ -100,12 +101,15 @@ def assign_mimag_qualities(df):
         quals = df.apply(select_quality_label, axis=1, method=_method)
         df[(_method, 'MIMAG_quality')] = pd.Categorical(quals, categories=cats)
 
-def combine_qc_results(out_dir,
-                       cluster_report, rna_report,
-                       checkm1_file, checkm2_file, cocopye_file,
-                       gtdbtk_file):
+def combine_qc_results(out_dir: str,
+                       cluster_report: str,
+                       rna_report: str,
+                       checkm1_file: str,
+                       checkm2_file: str,
+                       cocopye_file: str,
+                       gtdbtk_file: str) -> None:
 
-    def add_fancy_columns(df, name):
+    def add_fancy_columns(df: pd.DataFrame, name: str) -> None:
         df.columns = pd.MultiIndex.from_product([[name], df.columns])
 
     df_report = pd.read_csv(cluster_report) \
@@ -139,8 +143,13 @@ def combine_qc_results(out_dir,
         .rename(columns={'user_genome': 'bin'}) \
         .drop_duplicates(subset='bin', keep='first') \
         .set_index('bin')
-    df_gtdb[['domain','phylum','class','order','family','genus','species']] = df_gtdb.classification.str.split(';', expand=True) \
-        .apply(lambda x: [xi[3:] if xi is not None else '-' for xi in x if xi != 'root'], axis=1, result_type='expand')
+
+    df_gtdb[['domain','phylum','class','order','family','genus','species']] = (
+        df_gtdb.classification.str.split(';', expand=True).apply(
+            lambda x: [xi[3:] if xi is not None else '-' for xi in x if xi != 'root'],
+            axis=1,
+            result_type='expand'))
+
     add_fancy_columns(df_gtdb, 'GTDBtk')
 
     # TODO refer to figures. Do we just concat instead.

@@ -10,21 +10,13 @@ __version__ = '0.1.1'
 if __name__ == '__main__':
     import argparse
 
-    def mk_version():
+    def mk_version() -> str:
         return 'split v{}'.format(__version__)
 
-    def out_name(base, suffix):
+    def out_name(base: str, suffix: str) -> str:
         return '{}{}'.format(base, suffix)
 
-    def ifelse(arg, default):
-        if arg is None:
-            return default
-        else:
-            return arg
-
-
     parser = argparse.ArgumentParser(description='Split references prior to mapping Hi-C reads.')
-
     parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
     parser.add_argument('--clobber', default=False, action='store_true', help='Clobber existing files')
     parser.add_argument('--log', help='Log file path [split.log]')

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import argparse
-import pandas as pd
 import sys
+
+import pandas as pd
 
 parser = argparse.ArgumentParser(description='Select contaminated bins from consolidated QC table')
 parser.add_argument('--method', choices=['CheckMv1', 'CheckMv2', 'CoCoPye'], default='CoCoPye',
